@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diamond Rate & Weight Converter</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="app-container">
+        <!-- Header Section -->
+        <header class="main-header">
+            <div class="header-content">
+                <h1 id="app-title"><i class="fa-regular fa-gem"></i> Diamond Rate Convention</h1>
+            </div>
+
+            <div class="live-rate-display">
+                <div class="live-indicator">
+                    <span class="pulsing-dot"></span>
+                    <span class="live-text">LIVE AED RATE</span>
+                </div>
+                <div class="rate-value" id="live-rate-value">3.6725</div>
+            </div>
+        </header>
+
+        <!-- Rate Convention Panel -->
+        <section class="rate-convention-panel glass-panel">
+            <div class="panel-header">
+                <i class="fa-solid fa-calculator"></i>
+                <h2>Rate Convention</h2>
+            </div>
+
+            <div class="convention-grid">
+                <!-- Group 1: Inputs -->
+                <div class="input-group">
+                    <label>USD Gold Amount</label>
+                    <div class="input-wrapper">
+                        <span class="currency-symbol">$</span>
+                        <input type="number" id="usd-gold-input" placeholder="0.00" step="0.01">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Purity</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-gem input-icon"></i>
+                        <input type="number" id="purity-input" step="0.001">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Manual Dirham Value</label>
+                    <div class="input-wrapper">
+                        <span class="currency-symbol">AED</span>
+                        <input type="number" id="dirham-input" value="3.67" step="0.0001">
+                    </div>
+                </div>
+
+                <!-- Group 2: Calculated Result -->
+                <div class="result-group">
+                    <label>18K Gold Price (AED)</label>
+                    <div class="result-display" id="gold-price-display">0.0000</div>
+                    <div class="formula-caption">(USD ÷ 31.1) × Dirham × Purity</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tabs Navigation -->
+        <div class="tabs-nav">
+            <button class="tab-btn active" data-tab="diamond">
+                <i class="fa-regular fa-gem"></i> Diamond Calculation
+            </button>
+            <button class="tab-btn" data-tab="gold">
+                <i class="fa-solid fa-coins"></i> Gold Price Calculation
+            </button>
+        </div>
+
+        <!-- Tab 1: Diamond Table (Wrapped Existing) -->
+        <div id="tab-diamond" class="tab-content active">
+            <section class="table-section glass-panel">
+                <div class="table-container">
+                    <table id="diamond-table">
+                        <thead>
+                            <tr>
+                                <th>USD Rate ($)</th>
+                                <th>Size (mm)</th>
+                                <th>CT Weight</th>
+                                <th>PCS (Qty)</th>
+                                <th>Total Weight (ct)</th>
+                                <th>AED Total</th>
+                                <th><i class="fa-solid fa-trash-can"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <!-- Rows will be injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="table-actions">
+                    <button id="add-row-btn" class="btn-primary">
+                        <i class="fa-solid fa-plus"></i> Add New Entry
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Tab 2: Gold Calculation (New) -->
+        <div id="tab-gold" class="tab-content">
+            <section class="gold-section glass-panel">
+                <div class="gold-grid-container">
+
+                    <!-- Header Labels -->
+                    <div class="gold-grid-header">
+                        <div>Step</div>
+                        <div>Inputs / Reference</div>
+                        <div>Variables</div>
+                        <div>Result (AED)</div>
+                    </div>
+
+                    <!-- Row 1: Casting -->
+                    <div class="gold-row">
+                        <div class="gold-label">
+                            <span class="step-icon casting-icon"><i class="fa-solid fa-fire"></i></span>
+                            <div class="label-text">
+                                <strong>Casting</strong>
+                                <span class="label-sub">Base Calculation</span>
+                            </div>
+                        </div>
+                        <div class="gold-input-col">
+                            <label>Base Amount</label>
+                            <input type="number" id="cast-base-input" class="modern-input" placeholder="0.00">
+                            <div class="calc-hint">
+                                <span class="hint-label">+25%: </span><span id="cast-plus-25">0.00</span>
+                            </div>
+                        </div>
+                        <div class="gold-factor-col">
+                            <label>Factor</label>
+                            <input type="number" id="cast-factor-input" class="modern-input" value="2.5" step="0.1">
+                        </div>
+                        <div class="gold-result-col">
+                            <div id="res-casting" class="res-value">0.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: CAMP -->
+                    <div class="gold-row">
+                        <div class="gold-label">
+                            <span class="step-icon camp-icon"><i class="fa-solid fa-layer-group"></i></span>
+                            <div class="label-text">
+                                <strong>CAMP</strong>
+                                <span class="label-sub">Processing</span>
+                            </div>
+                        </div>
+                        <div class="gold-input-col">
+                            <label>Ref (Base + 25%)</label>
+                            <div id="camp-ref-display" class="ref-display">0.00</div>
+                        </div>
+                        <div class="gold-factor-col">
+                            <label>Divisor / Mult</label>
+                            <div class="combined-input">
+                                <span class="fixed-val">/ 17 × </span>
+                                <input type="number" id="camp-val-input" class="modern-input" value="20"
+                                    style="width: 60px;">
+                            </div>
+                        </div>
+                        <div class="gold-result-col">
+                            <div id="res-camp" class="res-value">0.00</div>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Making -->
+                    <div class="gold-row" id="making-row-container">
+                        <div class="gold-label">
+                            <span class="step-icon making-icon"><i class="fa-solid fa-hammer"></i></span>
+                            <div class="label-text">
+                                <strong>Making</strong>
+                                <span class="label-sub">1% × 18K Rate</span>
+                            </div>
+                        </div>
+                        <div class="gold-input-col">
+                            <label>1% of Base</label>
+                            <div id="making-percent-display" class="ref-display">0.00</div>
+                        </div>
+                        <div class="gold-factor-col">
+                            <label>18K Rate <button id="btn-sync-rate" class="btn-icon-small" title="Sync Rate"><i
+                                        class="fa-solid fa-rotate"></i></button></label>
+                            <div id="making-rate-display" class="ref-display highlight">0.0000</div>
+                        </div>
+                        <div class="gold-result-col">
+                            <div id="res-making" class="res-value">0.00</div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Gold Final Total -->
+                <div class="gold-total-section">
+                    <div class="total-label">Final Total Amount</div>
+                    <div class="total-value" id="gold-final-total">AED 0.00</div>
+                    <div class="total-formula">(Casting + CAMP + Making)</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Sticky Footer -->
+        <footer class="sticky-footer">
+            <div class="footer-content">
+                <div class="footer-stat">
+                    <span class="stat-label">Total Diamond Weight</span>
+                    <span class="stat-value" id="total-weight-display">0.000 ct</span>
+                </div>
+                <div class="footer-divider"></div>
+                <div class="footer-stat highlight">
+                    <span class="stat-label">Total Price (AED)</span>
+                    <span class="stat-value" id="total-price-display">AED 0.00</span>
+                </div>
+            </div>
+        </footer>
+
+        <!-- Confirmation Modal -->
+        <div id="confirm-modal" class="modal-overlay">
+            <div class="modal-content glass-panel">
+                <h3><i class="fa-solid fa-triangle-exclamation" style="color:#ef4444; margin-right:10px;"></i>Confirm
+                    Deletion</h3>
+                <div class="modal-details" id="modal-details">
+                    <!-- Injected via JS -->
+                </div>
+                <div class="modal-actions">
+                    <button id="btn-cancel-delete" class="btn-secondary">Cancel</button>
+                    <button id="btn-confirm-delete" class="btn-danger">Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Undo Notification -->
+        <div id="undo-toast" class="undo-toast">
+            <span>Entry deleted.</span>
+            <button id="btn-undo" class="undo-btn-action">
+                <i class="fa-solid fa-rotate-left"></i> Undo
+            </button>
+        </div>
+
+        <!-- Rate Validation Toast -->
+        <div id="rate-toast" class="undo-toast" style="background: var(--text-primary); color: #0f172a;">
+            <i class="fa-solid fa-circle-info"></i>
+            <span id="rate-toast-msg">Notification</span>
+        </div>
+
+        <!-- Permanent Floating Undo Button -->
+        <div class="fab-undo-container">
+            <button id="fab-undo" class="btn-fab-undo" title="Undo Delete">
+                <i class="fa-solid fa-rotate-left"></i>
+                <div id="undo-badge" class="undo-badge" style="display:none;">0</div>
+            </button>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
