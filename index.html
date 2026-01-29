@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reliable Jewelry Quotation Rate</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main class="app-container">
+
+        <!-- Header -->
+        <header class="app-header">
+            <h1>Reliable Jewellery</h1>
+            <p class="subtitle">Professional Quotation System</p>
+        </header>
+
+        <div class="main-grid">
+
+            <!-- Left Column -->
+            <div class="col-left" style="display:flex; flex-direction:column; gap:25px;">
+
+                <!-- Section 1: Rate Converter -->
+                <section class="card section-converter">
+                    <div class="card-header">
+                        <div class="icon-box"><i class="fa-solid fa-chart-line"></i></div>
+                        <h2>Rate Converter</h2>
+                    </div>
+
+                    <div class="converter-inputs">
+                        <div style="flex:1;">
+                            <label class="input-label">USD Price</label>
+                            <input type="number" id="usd-input" class="t-input" placeholder="0.00" step="0.01">
+                        </div>
+                        <div style="flex:1;">
+                            <label class="input-label">Purity</label>
+                            <input type="number" id="purity-input" class="t-input" placeholder="" step="0.001">
+                        </div>
+                    </div>
+
+                    <!-- Hidden Inputs -->
+                    <input type="hidden" id="oms-rate" value="31.1">
+                    <input type="hidden" id="dirham-rate" value="3.67">
+
+                    <!-- Output -->
+                    <div class="result-display-box">
+                        <div class="label">Calculated Rate</div>
+                        <div class="value" id="base-rate-result">0.0000</div>
+                        <div class="sub-label"></div>
+                    </div>
+                    <div class="formula-text">(USD ÷ 31.1) × 3.67 × Purity</div>
+                </section>
+
+                <!-- Section 2: Cost Analysis Table -->
+                <section class="card section-table">
+                    <div class="card-header">
+                        <div class="icon-box"><i class="fa-solid fa-calculator"></i></div>
+                        <h2>Cost Analysis</h2>
+                    </div>
+                    <table class="cost-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Weight / Details</th>
+                                <th>Amount (AED)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Gold</td>
+                                <td>
+                                    <div class="table-input" style="display:flex; gap:2px;">
+                                        <input type="number" id="gold-weight" placeholder="Wt" style="width:65px;">
+                                        <input type="text" id="gold-unit" value="g"
+                                            style="width:35px; text-align:center; padding:4px;">
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="table-result" id="gold-cost">0.00</div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Diamond</td>
+                                <td>
+                                    <div class="table-input"><input type="text" id="diamond-weight" placeholder="Wt">
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="table-input"><input type="number" id="diamond-cost" placeholder="0.00">
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Stone</td>
+                                <td>
+                                    <div class="table-input"><input type="text" id="stone-details" placeholder="-">
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="table-input"><input type="number" id="stone-cost" placeholder="0.00">
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <div class="table-input" style="width:100%;"><input type="text" id="other-name"
+                                            value="Other" style="width:100%; text-align: left; padding-left: 5px;">
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="table-input"><input type="text" id="other-details" placeholder="-">
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="table-input"><input type="number" id="other-cost" placeholder="0.00">
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Making</td>
+                                <td>
+                                    <div class="table-input"><input type="text" id="making-details" placeholder="-">
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="table-input"><input type="number" id="making-cost" placeholder="0.00">
+                                    </div>
+                                </td>
+                            </tr>
+                            <!-- Dynamic Items Insert Here -->
+                            <tr id="add-item-row">
+                                <td colspan="3" style="padding: 5px;">
+                                    <button id="add-item-btn" class="secondary-btn"
+                                        style="width: 100%; padding: 8px; border: 1px dashed var(--accent-teal); background: rgba(45, 212, 191, 0.1); color: var(--accent-teal); cursor: pointer; border-radius: 6px;">+
+                                        Add New Item</button>
+                                </td>
+                            </tr>
+                            <tr class="total-row">
+                                <td colspan="2">Total Cost</td>
+                                <td id="total-cost-display">0.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- Reference & Notes Row (Moved to Left) -->
+                <div class="split-row-cards">
+                    <!-- Reference Section -->
+                    <section class="card section-ref">
+                        <div class="card-header">
+                            <div class="icon-box"><i class="fa-solid fa-hashtag"></i></div>
+                            <h2>Ref</h2>
+                        </div>
+                        <input type="text" id="ref-input" class="t-input" placeholder="Ref No.">
+                    </section>
+
+                    <!-- Notes Section -->
+                    <section class="card section-notes">
+                        <div class="card-header">
+                            <div class="icon-box"><i class="fa-solid fa-note-sticky"></i></div>
+                            <h2>Note</h2>
+                        </div>
+                        <textarea id="note-input" class="t-input" placeholder="Notes..." rows="3"
+                            style="resize: none;"></textarea>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="col-right" style="display:flex; flex-direction:column; gap:25px;">
+
+                <!-- Section 3: Profit Margin -->
+                <section class="card section-pricing">
+                    <div class="card-header">
+                        <div class="icon-box"><i class="fa-solid fa-percent"></i></div>
+                        <h2>Profit Margin & Final Pricing</h2>
+                    </div>
+
+                    <table class="pricing-table">
+                        <thead>
+                            <tr>
+                                <th>Margin</th>
+                                <th>Final Price (AED)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="data-row">
+                                <td>15%</td>
+                                <td id="price-15">0.00</td>
+                            </tr>
+                            <tr class="data-row">
+                                <td>20%</td>
+                                <td id="price-20">0.00</td>
+                            </tr>
+                            <tr class="data-row">
+                                <td>25%</td>
+                                <td id="price-25">0.00</td>
+                            </tr>
+                            <tr class="data-row">
+                                <td>30%</td>
+                                <td id="price-30">0.00</td>
+                            </tr>
+                            <tr class="data-row">
+                                <td>35%</td>
+                                <td id="price-35">0.00</td>
+                            </tr>
+                            <tr class="data-row">
+                                <td>
+                                    <div class="custom-input-group">
+                                        <input type="number" id="custom-margin-input" placeholder="0" min="0" max="99">
+                                        %
+                                    </div>
+                                </td>
+                                <td id="price-custom">0.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <!-- Section 4: Media Upload -->
+                <section class="card section-media">
+                    <div class="card-header">
+                        <div class="icon-box"><i class="fa-solid fa-camera"></i></div>
+                        <h2>Jewellery Photo</h2>
+                    </div>
+                    <div class="upload-area" id="drop-zone">
+                        <input type="file" id="file-input" accept="image/*" hidden>
+                        <div class="upload-placeholder" id="upload-placeholder">
+                            <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                            <div class="upload-text">Click to upload or drag and drop</div>
+                        </div>
+                        <img id="image-preview" class="image-preview hidden" alt="Product Preview">
+                        <button id="remove-image-btn" class="remove-btn hidden"><i
+                                class="fa-solid fa-times"></i></button>
+                    </div>
+                </section>
+
+
+
+                <!-- Actions -->
+                <section class="card export-card">
+                    <div class="card-header">
+                        <div class="icon-box"><i class="fa-solid fa-download"></i></div>
+                        <h3>Export Quotation</h3>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="share-btn" class="primary-btn share"><i class="fa-solid fa-download"></i> Download
+                            Result (JPG)</button>
+                        <button id="save-btn" class="primary-btn save"><i class="fa-solid fa-history"></i> Save to
+                            History</button>
+                    </div>
+                </section>
+
+                <!-- History Section (Bottom) -->
+                <section class="card section-history" id="history-section" style="display: none;">
+                    <h3>Saved History</h3>
+                    <div id="history-list" class="history-list">
+                        <!-- Items injected here -->
+                    </div>
+                </section>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Hidden Share Layout (Existing Logic Preserved) -->
+    <!-- Hidden Share Layout (Compact Classic) -->
+    <div id="share-export-container" class="classic-share-container">
+        <!-- Header -->
+        <div class="classic-header">
+            <h1>Reliable Jewellery Quotation</h1>
+            <div id="share-time" class="classic-time">--</div>
+        </div>
+
+        <!-- Section 1: Rate Compact -->
+        <div class="classic-rate-box">
+            <div class="rate-item">
+                <span class="label">USD Price:</span>
+                <span class="value" id="ex-usd"></span>
+            </div>
+            <div class="rate-item">
+                <span class="label">Purity:</span>
+                <span class="value" id="ex-purity"></span>
+            </div>
+            <div class="rate-item highlight-box">
+                <span class="label">Rate (AED):</span>
+                <span class="value" id="ex-rate"></span>
+            </div>
+        </div>
+
+        <!-- Section 2: Cost Analysis Compact -->
+        <table class="classic-table cost-table-compact">
+            <thead>
+                <tr>
+                    <th style="text-align: center;">Item</th>
+                    <th style="text-align: center;">Details</th>
+                    <th style="text-align: center;">Cost (AED)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="text-align: center;">GOLD</td>
+                    <td style="text-align: center;" id="ex-gold-wt"></td>
+                    <td style="text-align: center;" id="ex-gold-cost"></td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;">DIAMOND</td>
+                    <td style="text-align: center;" id="ex-diamond-wt"></td>
+                    <td style="text-align: center;" id="ex-diamond-cost"></td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;">STONE</td>
+                    <td style="text-align: center;" id="ex-stone-details"></td>
+                    <td style="text-align: center;" id="ex-stone-cost"></td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;" id="ex-other-name">OTHER</td>
+                    <td style="text-align: center;" id="ex-other-details"></td>
+                    <td style="text-align: center;" id="ex-other-cost"></td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;">MAKING</td>
+                    <td style="text-align: center;" id="ex-making-details"></td>
+                    <td style="text-align: center;" id="ex-making-cost"></td>
+                </tr>
+                <tr class="total-row-compact">
+                    <td colspan="2" style="text-align: center;">TOTAL COST</td>
+                    <td style="text-align: center;" id="ex-total-cost"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Split Section: Margin (Left) + Photo (Right) -->
+        <div class="classic-split-row">
+            <!-- Margin Left -->
+            <div class="classic-margin-col">
+                <table class="classic-table margin-table-compact">
+                    <thead>
+                        <tr>
+                            <th style="text-align: center;">Margin %</th>
+                            <th style="text-align: right;">Final Price</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ex-profit-body">
+                        <!-- Rows injected -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Photo Right -->
+            <div class="classic-photo-col">
+                <div id="share-image-container">
+                    <!-- Image injected -->
+                </div>
+                <div id="ex-ref-no" class="ref-display-text"></div>
+            </div>
+        </div>
+
+        <!-- Footer: Notes -->
+        <div class="classic-notes-section">
+            <h4>Note</h4>
+            <div class="note-content-box" id="ex-note-content"></div>
+        </div>
+    </div>
+    <!-- html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
