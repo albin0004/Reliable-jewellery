@@ -9,7 +9,9 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
+        rel="stylesheet">
 
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -19,6 +21,10 @@
 </head>
 
 <body>
+
+    <!-- Ambient Background -->
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
 
     <main class="app-container">
 
@@ -156,6 +162,18 @@
                     </table>
                 </section>
 
+                <!-- Customer Section -->
+                <section class="card section-customer">
+                    <div class="card-header">
+                        <div class="icon-box"><i class="fa-solid fa-user"></i></div>
+                        <h2>Customer Details</h2>
+                    </div>
+                    <div class="customer-input-box">
+                        <input type="text" id="customer-input" class="t-input"
+                            placeholder="Enter Customer Name / Contact">
+                    </div>
+                </section>
+
                 <!-- Reference & Notes Row (Moved to Left) -->
                 <div class="split-row-cards">
                     <!-- Reference Section -->
@@ -184,9 +202,15 @@
 
                 <!-- Section 3: Profit Margin -->
                 <section class="card section-pricing">
-                    <div class="card-header">
-                        <div class="icon-box"><i class="fa-solid fa-percent"></i></div>
-                        <h2>Profit Margin</h2>
+                    <div class="card-header" style="justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div class="icon-box"><i class="fa-solid fa-percent"></i></div>
+                            <h2>Profit Margin & Final Pricing</h2>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="profit-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
                     </div>
 
                     <table class="pricing-table">
@@ -243,8 +267,9 @@
                             <div class="upload-text">Click to upload or drag and drop</div>
                         </div>
                         <img id="image-preview" class="image-preview hidden" alt="Product Preview">
-                        <button id="remove-image-btn" class="remove-btn hidden"><i
-                                class="fa-solid fa-times"></i></button>
+                        <button id="remove-image-btn" class="remove-btn hidden">
+                            <i class="fa-solid fa-trash"></i> Remove Image
+                        </button>
                     </div>
                 </section>
 
@@ -256,14 +281,6 @@
                         <div class="icon-box"><i class="fa-solid fa-download"></i></div>
                         <h3>Export Quotation</h3>
                     </div>
-                    
-                    <div style="margin-bottom: 20px; padding: 0 5px;">
-                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; color: var(--secondary-text); font-weight: 500;">
-                            <input type="checkbox" id="hide-margin-toggle" style="width: 20px; height: 20px; accent-color: var(--accent-gold);">
-                            Hide Profit Margin in Download
-                        </label>
-                    </div>
-
                     <div class="action-buttons">
                         <button id="share-btn" class="primary-btn share"><i class="fa-solid fa-download"></i> Download
                             Result (JPG)</button>
@@ -290,7 +307,10 @@
     <div id="share-export-container" class="classic-share-container">
         <!-- Header -->
         <div class="classic-header">
-            <h1>Reliable Jewellery Quotation</h1>
+            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                <h1>Reliable Jewellery Quotation</h1>
+                <div id="ex-customer-name" class="customer-display-text" style="display:none;"></div>
+            </div>
             <div id="share-time" class="classic-time">--</div>
         </div>
 
@@ -309,6 +329,8 @@
                 <span class="value" id="ex-rate"></span>
             </div>
         </div>
+
+
 
         <!-- Section 2: Cost Analysis Compact -->
         <table class="classic-table cost-table-compact">

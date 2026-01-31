@@ -376,6 +376,7 @@ body {
 .accent-text {
     background: linear-gradient(135deg, #fff 20%, var(--accent-gold) 100%);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -678,4 +679,481 @@ input[type="number"]:focus {
     .purity-results-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* --- New Purity Manual Input Section --- */
+.manual-input-section {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid var(--glass-border);
+}
+
+.media-note-flex {
+    display: flex;
+    gap: 15px;
+    align-items: stretch;
+}
+
+@media (max-width: 600px) {
+    .media-note-flex {
+        flex-direction: column;
+    }
+}
+
+/* Upload Box */
+.purity-upload-box {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px dashed var(--accent-gold);
+    border-radius: 12px;
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.purity-upload-box:hover {
+    background: rgba(212, 175, 55, 0.05);
+}
+
+.upload-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: var(--text-secondary);
+    gap: 5px;
+}
+
+.upload-placeholder i {
+    font-size: 1.5rem;
+    color: var(--accent-gold);
+}
+
+.preview-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.preview-container img {
+    max-width: 100%;
+    max-height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.remove-btn-small {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+}
+
+/* Note Box */
+.purity-note-box {
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+}
+
+.purity-note-box textarea {
+    flex: 1;
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 10px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: none;
+}
+
+.purity-note-box textarea:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+}
+
+/* Download Button */
+.download-btn {
+    width: 100%;
+    justify-content: center;
+    background: linear-gradient(135deg, #007aff, #0056b3);
+    /* Blue for download */
+    margin-top: 20px;
+}
+
+.download-btn:hover {
+    box-shadow: 0 5px 15px rgba(0, 122, 255, 0.3);
+}
+
+
+/* --- Purity Export Card (White/Gold Reference Theme) --- */
+.purity-export-card {
+    /* Dimensions & Layout */
+    width: 1080px;
+    height: auto;
+    /* Dynamic Height */
+    min-height: 1080px;
+    /* Minimum HD Square */
+    background-color: #ffffff;
+    color: #333333;
+    font-family: 'Outfit', sans-serif;
+    padding: 50px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+
+    /* Hidden Off-Screen Positioning */
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    z-index: -9999;
+}
+
+/* Header */
+.exp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 4px solid #eec846;
+    /* Reference Gold Line */
+    padding-bottom: 15px;
+    /* Compact */
+    margin-bottom: 20px;
+    /* Compact */
+}
+
+.exp-brand h1 {
+    color: #333333;
+    font-size: 3rem;
+    margin: 0;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.exp-brand p {
+    color: #888;
+    font-size: 1.4rem;
+    margin: 5px 0 0;
+    font-weight: 500;
+}
+
+.exp-meta {
+    text-align: right;
+    color: #555;
+    font-size: 1.4rem;
+    font-weight: 500;
+}
+
+/* Image Section - Reference Style */
+.exp-image-box {
+    margin-bottom: 25px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 450px;
+    /* Increased size */
+    height: 450px;
+    aspect-ratio: 1 / 1;
+    /* Force Square */
+    flex-shrink: 0;
+    /* Prevent shrinking */
+    overflow: hidden;
+    border-radius: 12px;
+    background: #f8f9fa;
+    /* Light grey bg like reference */
+    border: 1px solid #eee;
+    margin-left: auto;
+    margin-right: auto;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.exp-image-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* No Distortion */
+}
+
+/* Table Section */
+.exp-table-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.exp-row {
+    display: flex;
+    padding: 12px 0;
+    border-bottom: 1px dashed #ddd;
+    /* Softer divider */
+    font-size: 1.5rem;
+    align-items: center;
+    font-weight: 500;
+}
+
+.exp-header-row {
+    font-weight: 700;
+    color: #333;
+    /* Dark Text */
+    border-bottom: 2px solid #ccc;
+    background: #f9f9f9;
+    /* Subtle header bg */
+    border-radius: 8px 8px 0 0;
+    padding: 15px 0;
+    text-transform: uppercase;
+    font-size: 1.4rem;
+    letter-spacing: 1px;
+}
+
+/* Columns */
+.col-purity {
+    width: 25%;
+    text-align: left;
+    padding-left: 20px;
+}
+
+.col-weight {
+    width: 45%;
+    text-align: center;
+    color: #555;
+}
+
+.col-profit {
+    width: 30%;
+    text-align: right;
+    padding-right: 20px;
+    font-weight: 700;
+}
+
+/* Note Section - Yellow Reference Style */
+.exp-note {
+    margin-top: auto;
+    /* Push to bottom of flex container */
+    padding-top: 15px;
+    /* Minimal gap */
+}
+
+.note-box {
+    background: #fffbe6;
+    /* Light Yellow */
+    border-left: 8px solid #eec846;
+    /* Darker Gold/Yellow Bar */
+    padding: 20px 25px;
+    font-size: 1.4rem;
+    color: #5d5336;
+    /* Dark Gold/Brown Text */
+    font-weight: 600;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    box-shadow: none;
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+}
+
+.note-label {
+    color: #3d3316;
+    font-weight: 800;
+    margin-right: 15px;
+    text-transform: capitalize;
+    font-size: 1.5rem;
+}
+
+/* Footer */
+.exp-footer {
+    display: none;
+    /* Reference didn't emphasize footer, hiding to save space or simple copyright */
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Image Upload */
+.upload-area {
+    background: var(--input-bg);
+    border: 2px dashed var(--glass-border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.upload-area:hover {
+    border-color: var(--accent-gold);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.upload-icon {
+    font-size: 2rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.upload-text {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.image-preview {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    z-index: 2;
+}
+
+.remove-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Notes */
+textarea {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 14px;
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 0.95rem;
+    resize: none;
+    transition: all 0.2s;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+/* Hidden Export Container */
+.share-container {
+    position: fixed;
+    top: 0;
+    left: -9999px;
+    width: 600px;
+    background: #050b0e;
+    padding: 30px;
+    font-family: 'Outfit', sans-serif;
+    color: #fff;
+    border: 1px solid #333;
+}
+
+.share-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--accent-gold);
+    padding-bottom: 10px;
+}
+
+.share-header h3 {
+    color: var(--accent-gold);
+    font-size: 1.5rem;
+    text-transform: uppercase;
+}
+
+.share-content {
+    display: flex;
+    gap: 20px;
+}
+
+.share-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #111;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #222;
+}
+
+.share-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 1rem;
+    padding-bottom: 5px;
+    border-bottom: 1px dashed #333;
+}
+
+.share-row.highlight {
+    background: rgba(76, 217, 100, 0.1);
+    padding: 5px;
+    border-radius: 4px;
+    border: none;
+    color: var(--success-color);
+    font-weight: 700;
+}
+
+.gold-text {
+    color: var(--accent-gold);
+    font-weight: 700;
+}
+
+.share-image-box {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+}
+
+.share-image-box img {
+    max-width: 100%;
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+
+.share-notes {
+    margin-top: 20px;
+    padding: 15px;
+    background: #111;
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-gold);
+    font-size: 0.9rem;
+    color: #ccc;
 }

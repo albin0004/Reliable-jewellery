@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Section 1
     const usdInput = document.getElementById('usd-input');
+    const customerInput = document.getElementById('customer-input');
     const purityInput = document.getElementById('purity-input');
     const baseRateDisplay = document.getElementById('base-rate-result');
     const omsRateInput = document.getElementById('oms-rate'); // Hidden
@@ -60,7 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const price30 = document.getElementById('price-30');
     const price35 = document.getElementById('price-35');
     const priceCustom = document.getElementById('price-custom');
+
     const customMarginInput = document.getElementById('custom-margin-input');
+    const profitToggle = document.getElementById('profit-toggle');
+    const pricingTable = document.querySelector('.pricing-table');
 
     // Section 4
     const dropZone = document.getElementById('drop-zone');
@@ -233,6 +237,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Remove Image Logic
+    if (removeImageBtn) {
+        removeImageBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent triggering file input
+            imagePreview.src = '';
+            imagePreview.classList.add('hidden');
+            uploadPlaceholder.classList.remove('hidden');
+            removeImageBtn.classList.add('hidden');
+            fileInput.value = ''; // Reset input
+        });
+    }
+
+    // Toggle Profit Logic
+    if (profitToggle) {
+        profitToggle.addEventListener('change', () => {
+            if (profitToggle.checked) {
+                pricingTable.classList.remove('hidden');
+            } else {
+                pricingTable.classList.add('hidden');
+            }
+        });
+    }
+
+    // Dynamic Font Sizing Helper
+    function fitTextToContainer(element, minSize = 12, maxSize = 24) {
+        if (!element || !element.textContent) return;
+
+        // Reset to max size to start
+        let currentSize = maxSize;
+        element.style.fontSize = currentSize + 'px';
+
+        // Reduce until it fits or hits min size
+        while (element.scrollWidth > element.clientWidth && currentSize > minSize) {
+            currentSize--;
+            element.style.fontSize = currentSize + 'px';
+        }
+    }
+
     // Actions
     const saveBtn = document.getElementById('save-btn');
     const shareBtn = document.getElementById('share-btn');
@@ -249,10 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveHistory() {
         const record = {
             id: Date.now(),
-            time: new Date().toLocaleString(),
+            time: new Date().toLocaleDateString('en-GB').replace(/\//g, '-') + ' | ' + new Date().toLocaleTimeString('en-US', { timeZone: "Asia/Dubai", hour: '2-digit', minute: '2-digit', hour12: true }),
             data: { ...state } // Clone state
         };
         // Ensure diamond weight string is saved as visible in UI
+        record.data.customerName = customerInput.value;
         record.data.diamondDisplay = diamondWeightInput.value;
         record.data.refNumber = document.getElementById('ref-input').value; // Save Ref
         record.data.goldUnit = document.getElementById('gold-unit').value; // Save Gold Unit
@@ -313,6 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Populate inputs
         usdInput.value = d.usd || '';
+        customerInput.value = d.customerName || '';
         purityInput.value = d.purity || '';
         goldWeightInput.value = d.goldWeight || '';
 
@@ -436,11 +480,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 profitBody.appendChild(tr);
             }
 
-            // 5. Image & Reference
+
+
+            // Toggle Export Visibility
+            const exMarginCol = document.querySelector('.classic-margin-col');
+            if (profitToggle && !profitToggle.checked) {
+                exMarginCol.style.display = 'none';
+            } else {
+                exMarginCol.style.display = 'block';
+            }
+
+            // 5. Image & Reference & Customer
             const imgContent = document.getElementById('image-preview');
             const shareImgContainer = document.getElementById('share-image-container');
             const refOutput = document.getElementById('ex-ref-no');
             const refInput = document.getElementById('ref-input');
+            const custOutput = document.getElementById('ex-customer-name');
+
+            // Customer Name Logic
+            if (customerInput && customerInput.value.trim()) {
+                custOutput.textContent = customerInput.value;
+                custOutput.style.display = 'block';
+                // Trigger auto-resize (max 22px ~ 1.4rem, min 10px)
+                // We need to wait for render check, but since it's synchronous DOM update, loop works.
+                // However, container width must be set.
+                fitTextToContainer(custOutput, 10, 26);
+            } else {
+                custOutput.style.display = 'none';
+            }
 
             shareImgContainer.innerHTML = '';
             if (imgContent && !imgContent.classList.contains('hidden') && imgContent.src) {
@@ -472,13 +539,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 7. Capture (Seamless)
             const container = document.getElementById('share-export-container');
-            const hideMarginToggle = document.getElementById('hide-margin-toggle');
-
-            if (hideMarginToggle && hideMarginToggle.checked) {
-                container.classList.add('hide-margin');
-            } else {
-                container.classList.remove('hide-margin');
-            }
 
             const canvas = await html2canvas(container, {
                 scale: 3, // Increased scale for HD (approx 2400px width)

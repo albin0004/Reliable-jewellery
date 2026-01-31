@@ -186,10 +186,44 @@
                         </div>
                     </div>
 
+                    <!-- Manual Input Section (Media & Note) -->
+                    <div class="manual-input-section">
+                        <h3 class="column-title">Manual Input</h3>
+
+                        <div class="media-note-flex">
+                            <!-- Image Upload -->
+                            <div class="purity-upload-box" id="purity-drop-zone">
+                                <input type="file" id="purity-file-input" accept="image/*" hidden>
+                                <div class="upload-placeholder" id="purity-upload-placeholder">
+                                    <i class="fa-solid fa-camera"></i>
+                                    <span>Add Photo</span>
+                                </div>
+                                <div id="purity-image-preview-container" class="preview-container hidden">
+                                    <img id="purity-image-preview" alt="Preview">
+                                    <button id="purity-remove-image" type="button" class="remove-btn-small"><i
+                                            class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+
+                            <!-- Note Input -->
+                            <div class="purity-note-box">
+                                <label for="purity-note-input">Note</label>
+                                <textarea id="purity-note-input" rows="3" placeholder="Add a note..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Results Grid -->
                     <div class="purity-results-grid" id="purity-results-container">
                         <!-- Results will be injected here via JS -->
                         <div class="purity-placeholder">Enter details to see analysis</div>
+                    </div>
+
+                    <!-- Download Action -->
+                    <div class="action-row">
+                        <button type="button" id="purity-download-btn" class="action-btn download-btn">
+                            <i class="fa-solid fa-download"></i> Download Result
+                        </button>
                     </div>
                 </form>
             </div>
@@ -248,6 +282,30 @@
                                     <input type="number" id="c2-purity" step="0.001">
                                 </div>
                             </div>
+
+                            <!-- Image Upload -->
+                            <div class="input-group">
+                                <label>Jewellery Photo</label>
+                                <div class="upload-area" id="drop-zone">
+                                    <input type="file" id="file-input" accept="image/*" hidden>
+                                    <div class="upload-placeholder" id="upload-placeholder">
+                                        <i class="fa-solid fa-camera upload-icon"></i>
+                                        <div class="upload-text">Upload Image</div>
+                                    </div>
+                                    <img id="image-preview" class="image-preview hidden" alt="Preview">
+                                    <button type="button" id="remove-image-btn" class="remove-btn hidden">
+                                        <i class="fa-solid fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Notes -->
+                            <div class="input-group">
+                                <label for="c2-notes">Notes</label>
+                                <div class="input-wrapper">
+                                    <textarea id="c2-notes" placeholder="Add notes..." rows="3"></textarea>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -280,8 +338,12 @@
                     </div>
 
                     <div class="action-row">
-                        <button type="button" id="record-btn-2" class="action-btn">
-                            <i class="fa-solid fa-save"></i> Record Data
+                        <button type="button" id="share-btn" class="action-btn">
+                            <i class="fa-solid fa-download"></i> Download
+                        </button>
+                        <button type="button" id="record-btn-2" class="action-btn"
+                            style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">
+                            <i class="fa-solid fa-history"></i> Save
                         </button>
                     </div>
 
@@ -310,6 +372,79 @@
         </section>
     </main>
 
+    <!-- Hidden Receipt Container for Purity Download (1:1 Dark Theme) -->
+    <div id="purity-download-container" class="purity-export-card">
+        <!-- Header -->
+        <div class="exp-header">
+            <div class="exp-brand">
+                <h1>Reliable Jewelry</h1>
+                <p>Purity Analysis Report</p>
+            </div>
+            <div class="exp-meta">
+                <div id="receipt-date"></div>
+                <div id="receipt-time"></div>
+            </div>
+        </div>
+
+        <!-- Image (Optional) -->
+        <div id="receipt-image-container" class="exp-image-box hidden">
+            <!-- Image will be injected here -->
+        </div>
+
+        <!-- Table -->
+        <div class="exp-table-container">
+            <!-- Header -->
+            <div class="exp-row exp-header-row">
+                <div class="col-purity">Purity</div>
+                <div class="col-weight">Pure Weight</div>
+                <div class="col-profit">Profit %</div>
+            </div>
+            <!-- Body -->
+            <div id="receipt-grid-body" class="exp-body">
+                <!-- Rows injected via JS -->
+            </div>
+        </div>
+
+        <!-- Footer Note -->
+        <div id="receipt-note-section" class="exp-note hidden">
+            <div class="note-box">
+                <span class="note-label">Note:</span> <span id="receipt-note-text"></span>
+            </div>
+        </div>
+
+        <!-- Watermark/Footer -->
+        <div class="exp-footer">
+            Generated by Reliable Jewellery Rate Tool
+        </div>
+    </div>
+
+    <!-- html2canvas Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Hidden Export Container -->
+    <div id="share-export-container" class="share-container">
+        <div class="share-header">
+            <h3>Reliable Jewellery</h3>
+            <span id="share-time"></span>
+        </div>
+        <div class="share-content">
+            <div class="share-details">
+                <div class="share-row"><span>Weight:</span> <span id="ex-weight"></span></div>
+                <div class="share-row"><span>Purity:</span> <span id="ex-purity"></span></div>
+                <div class="share-row"><span>Sale Amt:</span> <span id="ex-sale-amt" class="gold-text"></span></div>
+                <div class="share-row"><span>Cost:</span> <span id="ex-cost"></span></div>
+                <div class="share-row highlight"><span>Profit:</span> <span id="ex-profit"></span></div>
+                <div class="share-row highlight"><span>Profit %:</span> <span id="ex-percent"></span></div>
+            </div>
+            <div class="share-image-box" id="share-image-box">
+                <!-- Image Injected Here -->
+            </div>
+        </div>
+        <div class="share-notes" id="share-notes" style="display: none;">
+            <strong>Note:</strong> <span id="ex-notes-text"></span>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="script.js"></script>
 </body>
 

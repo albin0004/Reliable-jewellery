@@ -1,0 +1,409 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+
+:root {
+    --gold-primary: #D4AF37;
+    --gold-light: #F3E5AB;
+    --gold-dark: #AA8C2C;
+    --bg-dark: #0a0a0a;
+    --bg-card: rgba(255, 255, 255, 0.03);
+    --bg-card-hover: rgba(255, 255, 255, 0.08);
+    --text-main: #ffffff;
+    --text-muted: #a0a0a0;
+    --gradient-gold: linear-gradient(135deg, #D4AF37 0%, #F3E5AB 50%, #AA8C2C 100%);
+    --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    --border-glass: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-dark);
+    font-family: 'Outfit', sans-serif;
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    background-image:
+        radial-gradient(circle at 10% 20%, rgba(212, 175, 55, 0.05) 0%, transparent 20%),
+        radial-gradient(circle at 90% 80%, rgba(212, 175, 55, 0.05) 0%, transparent 20%);
+}
+
+/* Animated Background Elements */
+/* Floating Animation */
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+
+    25% {
+        transform: translate(10px, 15px) rotate(2deg);
+    }
+
+    50% {
+        transform: translate(20px, 0px) rotate(-2deg);
+    }
+
+    75% {
+        transform: translate(-10px, -15px) rotate(1deg);
+    }
+}
+
+/* Twinkle/Sparkle Animation */
+@keyframes twinkle {
+
+    0%,
+    100% {
+        opacity: 0.1;
+        transform: scale(0.8);
+    }
+
+    50% {
+        opacity: 0.6;
+        transform: scale(1.2);
+    }
+}
+
+/* Shimmer Effect for Text/Cards */
+@keyframes shimmer {
+    0% {
+        background-position: -200% center;
+    }
+
+    100% {
+        background-position: 200% center;
+    }
+}
+
+/* Background Container to hold floating elements */
+.bg-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* Existing Orbs */
+.bg-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.3;
+}
+
+.orb-1 {
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(212, 175, 55, 0.1), transparent 70%);
+    top: -15%;
+    left: -10%;
+    animation: float 25s infinite ease-in-out;
+}
+
+.orb-2 {
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.03), transparent 70%);
+    bottom: -10%;
+    right: -5%;
+    animation: float 30s infinite ease-in-out reverse;
+}
+
+/* New: Geometric Jewellery Shapes (Abstract Diamonds/Rings) */
+.floating-shape {
+    position: absolute;
+    opacity: 0.05;
+    border: 1px solid var(--gold-primary);
+    animation: float 20s infinite linear;
+}
+
+.shape-diamond {
+    width: 60px;
+    height: 60px;
+    transform: rotate(45deg);
+    top: 20%;
+    left: 10%;
+    border-radius: 4px;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.1);
+    animation-duration: 25s;
+}
+
+.shape-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    top: 70%;
+    left: 80%;
+    animation-duration: 35s;
+    animation-delay: -5s;
+}
+
+.shape-gem {
+    width: 0;
+    height: 0;
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+    border-top: 30px solid rgba(212, 175, 55, 0.1);
+    top: 40%;
+    right: 20%;
+    border: none;
+    animation: float 28s infinite ease-in-out;
+}
+
+/* Sparkles */
+.sparkle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 0 10px 2px var(--gold-light);
+    animation: twinkle 4s infinite ease-in-out;
+}
+
+.s1 {
+    top: 15%;
+    left: 25%;
+    animation-delay: 0s;
+}
+
+.s2 {
+    top: 35%;
+    right: 15%;
+    animation-delay: 1.5s;
+    width: 3px;
+    height: 3px;
+}
+
+.s3 {
+    bottom: 25%;
+    left: 40%;
+    animation-delay: 3s;
+    width: 5px;
+    height: 5px;
+}
+
+.s4 {
+    top: 10%;
+    right: 40%;
+    animation-delay: 0.5s;
+    width: 2px;
+    height: 2px;
+}
+
+
+/* Header */
+header {
+    text-align: center;
+    padding: 4rem 1rem 2rem;
+    position: relative;
+}
+
+h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    letter-spacing: -0.5px;
+    animation: fadeInDown 1s ease-out;
+}
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    font-weight: 300;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    animation: fadeInUp 1s ease-out 0.3s backwards;
+}
+
+/* Grid Container */
+.app-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 2.5rem;
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 2rem;
+    width: 100%;
+}
+
+/* Glass Cards */
+.card {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: var(--border-glass);
+    border-radius: 24px;
+    padding: 2.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    overflow: hidden;
+    text-decoration: none;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    animation: fadeInUp 0.8s ease-out backwards;
+}
+
+.card:nth-child(1) {
+    animation-delay: 0.4s;
+}
+
+.card:nth-child(2) {
+    animation-delay: 0.6s;
+}
+
+.card:nth-child(3) {
+    animation-delay: 0.8s;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-gold);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-10px) scale(1.02);
+    background: var(--bg-card-hover);
+    box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.4);
+    border-color: rgba(212, 175, 55, 0.3);
+}
+
+.card:hover::before {
+    opacity: 1;
+}
+
+/* Card Icons */
+.icon-wrapper {
+    width: 70px;
+    height: 70px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    transition: all 0.3s ease;
+    color: var(--gold-primary);
+}
+
+.card:hover .icon-wrapper {
+    background: var(--gradient-gold);
+    color: var(--bg-dark);
+    border-color: transparent;
+    transform: rotate(5deg);
+}
+
+.icon-wrapper svg {
+    width: 32px;
+    height: 32px;
+    stroke-width: 1.5;
+}
+
+.card h2 {
+    color: var(--text-main);
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+}
+
+.card p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 2rem;
+    flex-grow: 1;
+}
+
+/* Buttons */
+.launch-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1.8rem;
+    background: transparent;
+    border: 1px solid var(--gold-primary);
+    color: var(--gold-primary);
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+}
+
+.card:hover .launch-btn {
+    background: var(--gold-primary);
+    color: var(--bg-dark);
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+}
+
+/* Animations */
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Footer */
+footer {
+    margin-top: auto;
+    padding: 2rem;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+    h1 {
+        font-size: 2.5rem;
+    }
+
+    .bg-orb {
+        opacity: 0.2;
+    }
+}
