@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reliable Jewellery Rate Convention</title>
+    <meta name="description" content="Comprehensive rate conversion tool for jewellery with live AED tracking.">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#050505">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="background-globules">
+        <div class="globule globule-1"></div>
+        <div class="globule globule-2"></div>
+        <div class="globule globule-3"></div>
+    </div>
+
+    <main class="container">
+        <header class="app-header">
+            <h1>Reliable Jewellery <span class="accent-text">Rate Convention</span></h1>
+            <p class="subtitle">Premium Rate Conversion Tool</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="category-1">
+                <i class="fa-solid fa-calculator"></i> Rate Converter
+            </button>
+            <button class="tab-btn" data-tab="category-3">
+                <i class="fa-solid fa-gem"></i> Purity
+            </button>
+            <button class="tab-btn" data-tab="category-2">
+                <i class="fa-solid fa-chart-line"></i> Sales Analytics
+            </button>
+        </div>
+
+        <section class="converter-card glass-panel">
+            <!-- Category 1: Rate Converter -->
+            <div id="category-1" class="tab-content active">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-scale-balanced"></i> Rate Conversion</h2>
+                    <div class="live-indicator">
+                        <span class="pulse-dot"></span>
+                        <span id="live-status-text">Connecting...</span>
+                    </div>
+                </div>
+
+                <form id="conversion-form-1" onsubmit="return false;">
+                    <div class="input-grid">
+                        <div class="input-group">
+                            <label for="usd-input">USD Amount ($)</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-dollar-sign input-icon"></i>
+                                <input type="number" id="usd-input" step="0.01" required>
+                            </div>
+                        </div>
+
+                        <div class="input-group" style="display: none;">
+                            <label for="ounce-rate-input">Ounce Rate</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-weight-hanging input-icon"></i>
+                                <input type="number" id="ounce-rate-input" step="0.0001" value="31.1" readonly required>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="purity-input">Purity (0.0 - 1.0)</label>
+                            <div class="input-wrapper">
+                                <i class="fa-regular fa-gem input-icon"></i>
+                                <input type="number" id="purity-input" value="0.75" step="0.001" max="1" min="0"
+                                    required>
+                            </div>
+                        </div>
+
+                        <div class="input-group readonly-group">
+                            <label for="aed-rate">AED Rate (Live)</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-money-bill-1-wave input-icon"></i>
+                                <input type="number" id="aed-rate" value="3.67" step="0.0001">
+                                <button type="button" id="refresh-rate-btn" class="icon-btn" title="Refresh Rate">
+                                    <i class="fa-solid fa-arrows-rotate"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="result-section">
+                        <div class="result-label">Calculated Result (18K Price)</div>
+                        <div class="result-value" id="result-display">0.0000</div>
+                        <button type="button" id="record-btn-1" class="action-btn">
+                            <i class="fa-solid fa-save"></i> Record Data
+                        </button>
+                    </div>
+
+                    <div class="history-section" id="history-section-1" style="display: none;">
+                        <h3>Calculated History</h3>
+                        <div class="table-container">
+                            <table id="history-table-1">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>USD</th>
+                                        <th>Rate</th>
+                                        <th>Purity</th>
+                                        <th>AED</th>
+                                        <th>Result</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Category 3: Purity Analysis (Now 2nd) -->
+            <div id="category-3" class="tab-content">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-layer-group"></i> Purity Analysis</h2>
+                </div>
+
+                <form id="conversion-form-3" onsubmit="return false;">
+                    <div class="input-grid">
+                        <!-- Inputs for Calculation -->
+                        <div class="column">
+                            <h3 class="column-title">Item Details</h3>
+
+                            <div class="input-group">
+                                <label for="c3-gold-price-input">Gold Price (18K)</label>
+                                <div class="input-wrapper highlight-input">
+                                    <i class="fa-solid fa-tag input-icon"></i>
+                                    <input type="number" id="c3-gold-price-input" placeholder="Auto-filled"
+                                        step="0.0001">
+                                    <span class="manual-badge" id="c3-manual-badge"
+                                        title="Auto-filled from Calculator. Edit to override.">Linked</span>
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="c3-item-weight">Item Weight (g)</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-solid fa-scale-unbalanced-flip input-icon"></i>
+                                    <input type="number" id="c3-item-weight" step="0.01">
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="c3-making-cost">Making Cost</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-solid fa-hammer input-icon"></i>
+                                    <input type="number" id="c3-making-cost" step="0.01">
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="c3-gold-stone">Gold with Stone (g)</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-regular fa-circle-dot input-icon"></i>
+                                    <input type="number" id="c3-gold-stone" step="0.01">
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="c3-manual-purity">Manual Purity (Optional)</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-solid fa-pen-to-square input-icon"></i>
+                                    <input type="number" id="c3-manual-purity" step="0.001" min="0" max="1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manual Input Section (Media & Note) -->
+                    <div class="manual-input-section">
+                        <h3 class="column-title">Manual Input</h3>
+
+                        <div class="media-note-flex">
+                            <!-- Image Upload -->
+                            <div class="purity-upload-box" id="purity-drop-zone">
+                                <input type="file" id="purity-file-input" accept="image/*" hidden>
+                                <div class="upload-placeholder" id="purity-upload-placeholder">
+                                    <i class="fa-solid fa-camera"></i>
+                                    <span>Add Photo</span>
+                                </div>
+                                <div id="purity-image-preview-container" class="preview-container hidden">
+                                    <img id="purity-image-preview" alt="Preview">
+                                    <button id="purity-remove-image" type="button" class="remove-btn-small"><i
+                                            class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+
+                            <!-- Note Input -->
+                            <div class="purity-note-box">
+                                <label for="purity-note-input">Note</label>
+                                <textarea id="purity-note-input" rows="3" placeholder="Add a note..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results Grid -->
+                    <div class="purity-results-grid" id="purity-results-container">
+                        <!-- Results will be injected here via JS -->
+                        <div class="purity-placeholder">Enter details to see analysis</div>
+                    </div>
+
+                    <!-- Download Action -->
+                    <div class="action-row">
+                        <button type="button" id="purity-download-btn" class="action-btn download-btn">
+                            <i class="fa-solid fa-download"></i> Download Result
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Category 2: Sales & Profit (Now 3rd) -->
+            <div id="category-2" class="tab-content">
+                <div class="card-header">
+                    <h2><i class="fa-solid fa-coins"></i> Gold Sales & Profit</h2>
+                </div>
+
+                <form id="conversion-form-2" onsubmit="return false;">
+                    <div class="input-grid">
+                        <!-- Left Column: Inputs -->
+                        <div class="column">
+                            <h3 class="column-title">Item Details</h3>
+
+                            <div class="input-group">
+                                <label for="c2-gold-price-input">Gold Price (18K)</label>
+                                <div class="input-wrapper highlight-input">
+                                    <i class="fa-solid fa-tag input-icon"></i>
+                                    <input type="number" id="c2-gold-price-input" placeholder="Auto-filled"
+                                        step="0.0001">
+                                    <span class="manual-badge" id="c2-manual-badge"
+                                        title="Auto-filled from Calculator. Edit to override.">Linked</span>
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="c2-item-weight">Item Weight (g)</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-solid fa-scale-unbalanced-flip input-icon"></i>
+                                    <input type="number" id="c2-item-weight" step="0.01">
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="c2-making-cost">Making Cost</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-solid fa-hammer input-icon"></i>
+                                    <input type="number" id="c2-making-cost" step="0.01">
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="c2-gold-stone">Gold with Stone (g)</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-regular fa-circle-dot input-icon"></i>
+                                    <input type="number" id="c2-gold-stone" step="0.01">
+                                </div>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="c2-purity">Purity (Start)</label>
+                                <div class="input-wrapper">
+                                    <i class="fa-regular fa-gem input-icon"></i>
+                                    <input type="number" id="c2-purity" step="0.001">
+                                </div>
+                            </div>
+
+                            <!-- Image Upload -->
+                            <div class="input-group">
+                                <label>Jewellery Photo</label>
+                                <div class="upload-area" id="drop-zone">
+                                    <input type="file" id="file-input" accept="image/*" hidden>
+                                    <div class="upload-placeholder" id="upload-placeholder">
+                                        <i class="fa-solid fa-camera upload-icon"></i>
+                                        <div class="upload-text">Upload Image</div>
+                                    </div>
+                                    <img id="image-preview" class="image-preview hidden" alt="Preview">
+                                    <button type="button" id="remove-image-btn" class="remove-btn hidden">
+                                        <i class="fa-solid fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Notes -->
+                            <div class="input-group">
+                                <label for="c2-notes">Notes</label>
+                                <div class="input-wrapper">
+                                    <textarea id="c2-notes" placeholder="Add notes..." rows="3"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results Display Area -->
+                    <div class="analytics-dashboard">
+                        <div class="metric-card">
+                            <span class="metric-label">Pure Price</span>
+                            <span class="metric-value" id="res-pure-price">0.00</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Pure Weight</span>
+                            <span class="metric-value" id="res-pure-weight">0.00</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Sale Amount</span>
+                            <span class="metric-value gold" id="res-sale-amount">0.00</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Total Cost</span>
+                            <span class="metric-value" id="res-cost">0.00</span>
+                        </div>
+                        <div class="metric-card highlight">
+                            <span class="metric-label">Profit</span>
+                            <span class="metric-value" id="res-profit">0.00</span>
+                        </div>
+                        <div class="metric-card highlight">
+                            <span class="metric-label">Profit %</span>
+                            <span class="metric-value" id="res-profit-percent">0.00%</span>
+                        </div>
+                    </div>
+
+                    <div class="action-row">
+                        <button type="button" id="share-btn" class="action-btn">
+                            <i class="fa-solid fa-download"></i> Download
+                        </button>
+                        <button type="button" id="record-btn-2" class="action-btn"
+                            style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">
+                            <i class="fa-solid fa-history"></i> Save
+                        </button>
+                    </div>
+
+                    <div class="history-section" id="history-section-2" style="display: none;">
+                        <h3>Sales History</h3>
+                        <div class="table-container">
+                            <table id="history-table-2">
+                                <thead>
+                                    <tr>
+                                        <th>Wt</th>
+                                        <th>Purity</th>
+                                        <th>Sale Amt</th>
+                                        <th>Cost</th>
+                                        <th>Profit</th>
+                                        <th>%</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <!-- Hidden Receipt Container for Purity Download (1:1 Dark Theme) -->
+    <div id="purity-download-container" class="purity-export-card">
+        <!-- Header -->
+        <div class="exp-header">
+            <div class="exp-brand">
+                <h1>Reliable Jewelry</h1>
+                <p>Purity Analysis Report</p>
+            </div>
+            <div class="exp-meta">
+                <div id="receipt-date"></div>
+                <div id="receipt-time"></div>
+            </div>
+        </div>
+
+        <!-- Image (Optional) -->
+        <div id="receipt-image-container" class="exp-image-box hidden">
+            <!-- Image will be injected here -->
+        </div>
+
+        <!-- Table -->
+        <div class="exp-table-container">
+            <!-- Header -->
+            <div class="exp-row exp-header-row">
+                <div class="col-purity">Purity</div>
+                <div class="col-weight">Pure Weight</div>
+                <div class="col-profit">Profit %</div>
+            </div>
+            <!-- Body -->
+            <div id="receipt-grid-body" class="exp-body">
+                <!-- Rows injected via JS -->
+            </div>
+        </div>
+
+        <!-- Footer Note -->
+        <div id="receipt-note-section" class="exp-note hidden">
+            <div class="note-box">
+                <span class="note-label">Note:</span> <span id="receipt-note-text"></span>
+            </div>
+        </div>
+
+        <!-- Watermark/Footer -->
+        <div class="exp-footer">
+            Generated by Reliable Jewellery Rate Tool
+        </div>
+    </div>
+
+    <!-- html2canvas Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Hidden Export Container -->
+    <div id="share-export-container" class="share-container">
+        <div class="share-header">
+            <h3>Reliable Jewellery</h3>
+            <span id="share-time"></span>
+        </div>
+        <div class="share-content">
+            <div class="share-details">
+                <div class="share-row"><span>Weight:</span> <span id="ex-weight"></span></div>
+                <div class="share-row"><span>Purity:</span> <span id="ex-purity"></span></div>
+                <div class="share-row"><span>Sale Amt:</span> <span id="ex-sale-amt" class="gold-text"></span></div>
+                <div class="share-row"><span>Cost:</span> <span id="ex-cost"></span></div>
+                <div class="share-row highlight"><span>Profit:</span> <span id="ex-profit"></span></div>
+                <div class="share-row highlight"><span>Profit %:</span> <span id="ex-percent"></span></div>
+            </div>
+            <div class="share-image-box" id="share-image-box">
+                <!-- Image Injected Here -->
+            </div>
+        </div>
+        <div class="share-notes" id="share-notes" style="display: none;">
+            <strong>Note:</strong> <span id="ex-notes-text"></span>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
