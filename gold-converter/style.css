@@ -1,0 +1,328 @@
+/* Base Variables - Modern Luxury Theme */
+:root {
+    --gold-primary: #D4AF37;
+    --gold-light: #F3E5AB;
+    --gold-dark: #AA8C2C;
+    --bg-dark: #0a0a0a;
+    --bg-card: rgba(255, 255, 255, 0.03);
+    --bg-card-hover: rgba(255, 255, 255, 0.05);
+    --text-main: #ffffff;
+    --text-muted: #a0a0a0;
+    --gradient-gold: linear-gradient(135deg, #D4AF37 0%, #F3E5AB 50%, #AA8C2C 100%);
+    --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    --border-glass: 1px solid rgba(255, 255, 255, 0.08);
+
+    --accent-teal: #2dd4bf;
+    --input-bg: rgba(0, 0, 0, 0.3);
+    --card-border: var(--border-glass);
+    --primary-text: var(--text-main);
+    --secondary-text: var(--text-muted);
+}
+
+/* Reset & Base */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--primary-text);
+    line-height: 1.6;
+    padding: 40px 20px;
+    min-height: 100vh;
+    background-image:
+        radial-gradient(circle at 10% 20%, rgba(212, 175, 55, 0.05) 0%, transparent 20%),
+        radial-gradient(circle at 90% 80%, rgba(212, 175, 55, 0.05) 0%, transparent 20%);
+    overflow-x: hidden;
+}
+
+/* Hide Spin Buttons */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* Background Orbs */
+.bg-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(60px);
+    z-index: -1;
+    opacity: 0.4;
+    animation: float 20s infinite ease-in-out;
+    pointer-events: none;
+    will-change: transform;
+}
+
+.orb-1 {
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(212, 175, 55, 0.15), transparent);
+    top: -200px;
+    left: -200px;
+}
+
+.orb-2 {
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(67, 67, 67, 0.3), transparent);
+    bottom: -100px;
+    right: -100px;
+    animation-delay: -5s;
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+
+    50% {
+        transform: translate(30px, 50px);
+    }
+}
+
+/* Header */
+.app-header {
+    text-align: center;
+    margin-bottom: 40px;
+    position: relative;
+}
+
+.app-header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.5rem;
+    background: var(--gradient-gold);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    color: var(--secondary-text);
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    font-weight: 300;
+    text-transform: uppercase;
+}
+
+.back-home-btn {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    color: var(--accent-teal);
+    text-decoration: none;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s;
+}
+
+.back-home-btn:hover {
+    color: var(--gold-primary);
+}
+
+/* Layout */
+.app-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.main-content {
+    display: flex;
+    justify-content: center;
+}
+
+/* Card */
+.card {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: var(--border-glass);
+    border-radius: 20px;
+    padding: 30px;
+    width: 100%;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--border-glass);
+    padding-bottom: 20px;
+}
+
+.icon-box {
+    width: 50px;
+    height: 50px;
+    background: var(--accent-teal);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bg-dark);
+    font-size: 1.5rem;
+}
+
+.card-header h2 {
+    font-size: 1.8rem;
+    color: var(--primary-text);
+    font-weight: 700;
+}
+
+/* Converter Grid */
+.converter-grid {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.converter-col {
+    flex: 1;
+    background: var(--input-bg);
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid var(--border-glass);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform 0.3s, border-color 0.3s;
+}
+
+.converter-col:hover {
+    border-color: rgba(212, 175, 55, 0.3);
+    transform: translateY(-5px);
+}
+
+.converter-col:focus-within {
+    border-color: var(--gold-primary);
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.1);
+}
+
+.col-label {
+    color: var(--gold-primary);
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+}
+
+.input-wrapper {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.t-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-glass);
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.t-input:focus {
+    border-color: var(--gold-primary);
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.large-input {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--gold-light);
+}
+
+.sub-input-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    margin-top: 10px;
+    width: 100%;
+}
+
+.sub-input-group label {
+    font-size: 0.8rem;
+    color: var(--secondary-text);
+}
+
+.small-input {
+    font-size: 1rem;
+    padding: 8px;
+    width: 80%;
+}
+
+.sub-label {
+    color: var(--secondary-text);
+    font-size: 0.9rem;
+    margin-top: 10px;
+}
+
+/* Separator */
+.col-separator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding-top: 60px;
+    /* Align with inputs approximately */
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    opacity: 0.5;
+}
+
+.info-text {
+    text-align: center;
+    color: var(--secondary-text);
+    font-size: 0.9rem;
+    margin-top: 20px;
+    border-top: 1px solid var(--border-glass);
+    padding-top: 20px;
+}
+
+/* Responsiveness */
+@media (max-width: 768px) {
+    .converter-grid {
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .col-separator {
+        display: none;
+    }
+
+    .back-home-btn {
+        position: static;
+        transform: none;
+        justify-content: center;
+        margin-bottom: 15px;
+    }
+
+    .app-header {
+        margin-top: 20px;
+    }
+}
