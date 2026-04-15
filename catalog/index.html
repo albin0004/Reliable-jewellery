@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reliable Jewellery | Catalog</title>
+    <meta name="description" content="Reliable Jewellery – Real-time catalog management, material tracking, and price calculation.">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Toast (user actions) -->
+    <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+    <!-- Live-update toast (remote DB events) -->
+    <div id="live-toast" class="toast live" role="status" aria-live="polite"></div>
+
+    <!-- ─── PASSWORD OVERLAY ─── -->
+    <div id="pw-overlay" class="pw-overlay hidden">
+        <div class="pw-modal">
+            <div class="pw-modal-icon">
+                <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text)"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <h2 class="pw-modal-title">Restricted Access</h2>
+            <p class="pw-modal-sub">Please enter the staff passcode to access the Materials section.</p>
+            
+            <div class="pw-input-wrap">
+                <input type="password" id="pw-input" class="pw-input" placeholder="••••" style="text-align:center;letter-spacing:4px;font-size:1.5rem">
+            </div>
+            <p id="pw-error-text" class="hidden" style="color:#f87171;font-size:0.75rem;margin-top:4px;font-weight:600;margin-bottom:12px">Incorrect passcode</p>
+            
+            <div style="display:flex; gap:10px; width:100%; margin-top:10px;">
+                <button class="btn btn-outline" id="pw-cancel-btn" style="flex:1">Cancel</button>
+                <button class="btn btn-gradient green" id="pw-submit-btn" style="flex:1">Unlock</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         TOP NAVIGATION BAR
+         ═══════════════════════════════════════ -->
+    <header class="topnav">
+        <div class="topnav-inner">
+
+            <!-- Brand -->
+            <div class="brand">
+                <span class="brand-name">Reliable <strong>Jewellery</strong></span>
+            </div>
+
+            <!-- Nav Tabs -->
+            <nav class="nav-tabs" role="navigation" aria-label="Main navigation">
+                <a href="#" class="tab active" id="nav-calculator">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg>
+                    Calculator
+                </a>
+                <a href="#" class="tab" id="nav-catalog">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    Catalog
+                    <span class="tab-badge" id="tab-badge-catalog">0</span>
+                </a>
+                <a href="./price_list/index.html" class="tab" id="nav-pricelist">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    Price List
+                </a>
+                <a href="#" class="tab" id="nav-manager">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    Materials
+                    <span class="tab-badge" id="tab-badge-manager">0</span>
+                </a>
+            </nav>
+
+            <!-- Status -->
+            <div class="topnav-right" style="display:flex; align-items:center;">
+                
+                <div class="notification-wrap" id="notif-wrap" style="position:relative; margin-right:15px; cursor:pointer; color:var(--text); display:flex; align-items:center;">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-2)"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    <div class="notif-badge hidden" id="notif-badge" style="position:absolute; top:-1px; right:-1px; width:7px; height:7px; background:#fde047; border-radius:50%; box-shadow:0 0 4px #fde047;"></div>
+                    
+                    <div id="notif-dropdown" class="hidden" style="position:absolute; top:35px; right:0; width:340px; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); box-shadow:var(--sh-lg); z-index:100; max-height:400px; display:flex; flex-direction:column; overflow:hidden; cursor:default; transform-origin:top right; animation:scaleIn 0.2s cubic-bezier(0.4,0,0.2,1);">
+                        <div style="padding:10px 15px; border-bottom:1px solid var(--border); font-size:0.85rem; font-weight:700; color:var(--text);">Activity Logs</div>
+                        <div id="notif-list" style="overflow-y:auto; flex:1; max-height:350px;">
+                            <div style="padding:15px; text-align:center; color:var(--text-3); font-size:0.8rem;">No recent alerts.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="connection-pill">
+                    <span class="status-dot"></span>
+                    <span id="connection-text">Connecting…</span>
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════
+         MAIN CONTENT (single-screen, no scroll)
+         ═══════════════════════════════════════ -->
+    <main class="page-body">
+
+        <!-- ─── VIEW: CATALOG ─── -->
+        <div class="view hidden" id="view-catalog">
+            <div class="view-grid catalog-grid">
+
+                <!-- Add Product Card -->
+                <div class="card" id="card-add-product">
+                    <div class="card-header">
+                        <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        </span>
+                        <h2 class="card-title">Add Product</h2>
+                    </div>
+                    <div class="card-body scrollable">
+                        <form id="upload-form">
+                            <div class="image-upload-area" id="drop-zone">
+                                <input type="file" id="image-input" accept="image/*" hidden>
+                                <div class="upload-placeholder">
+                                    <div class="upload-icon-wrap">
+                                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m14-7l-5-5-5 5m5-5v12"/></svg>
+                                    </div>
+                                    <p class="upload-hint">Click or drag & drop</p>
+                                    <p class="upload-sub">PNG, JPG, WEBP</p>
+                                </div>
+                                <img id="image-preview" src="" alt="Preview" class="hidden">
+                            </div>
+                            <div class="form-group">
+                                <label for="product-code">Product Code</label>
+                                <input type="text" id="product-code" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="product-note">Note <span class="optional">(Optional)</span></label>
+                                <textarea id="product-note" rows="2"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-gradient" id="submit-btn">
+                                <span class="btn-text">✦ Publish to Catalog</span>
+                                <div class="loader hidden"></div>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Live Feed Card -->
+                <div class="card" id="card-live-feed">
+                    <div class="card-header">
+                        <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        </span>
+                        <h2 class="card-title">Product List</h2>
+                        <div class="live-pill">● Live</div>
+                    </div>
+                    <div class="card-body scrollable" id="catalog-list">
+                        <div class="empty-state hidden" id="empty-state">
+                            <div class="empty-icon">📭</div>
+                            <p>No products yet. Add your first!</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ─── VIEW: MANAGER ─── -->
+        <div class="view hidden" id="view-manager">
+            <div class="view-grid manager-grid">
+
+                <!-- Material Form Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                        </span>
+                        <h2 class="card-title">Assign Materials</h2>
+                    </div>
+                    <div class="card-body scrollable">
+                        <form id="material-form">
+                            <input type="hidden" id="mat-edit-id">
+                            <div class="form-group">
+                                <label for="mat-code">Product Code</label>
+                                <input type="text" id="mat-code" list="catalog-codes" required>
+                                <datalist id="catalog-codes"></datalist>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="mat-gold">Gold (g)</label>
+                                    <input type="text" id="mat-gold" placeholder="0.00" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mat-diamond">Diamond</label>
+                                    <input type="text" id="mat-diamond" placeholder="0.00" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="mat-other">Other Making</label>
+                                    <input type="text" id="mat-other" placeholder="0.00" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mat-making">Making</label>
+                                    <input type="text" id="mat-making" placeholder="0.00" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-gradient green" id="mat-submit-btn" style="margin-bottom: 10px;">
+                                <span class="btn-text">Save Details</span>
+                            </button>
+                            <button type="button" class="btn btn-exclude" id="mat-exclude-btn">
+                                <span class="btn-text">Save Values Exclude from Catalog</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Saved Materials Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        </span>
+                        <h2 class="card-title">Saved Materials</h2>
+                        <span class="tab-badge has-items" id="mat-count-badge" style="margin-left:auto">0</span>
+                    </div>
+                    <div class="card-body scrollable">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Gold</th>
+                                    <th>Diamond</th>
+                                    <th>Other</th>
+                                    <th>Making</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="material-list"></tbody>
+                        </table>
+                        <div class="empty-state hidden" id="mat-empty-state">
+                            <div class="empty-icon">🗂️</div>
+                            <p>No materials assigned yet.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ─── VIEW: CALCULATOR ─── -->
+        <div class="view active" id="view-calculator">
+            <div class="view-grid calc-grid">
+
+                <!-- Rate Card -->
+                <div class="card rate-card">
+                    <div class="card-header">
+                        <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        </span>
+                        <h2 class="card-title">Per Gram Rate</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="rate-inputs">
+                            <div class="rate-input-group">
+                                <label for="calc-dollar">Dollar ($)</label>
+                                <input type="number" id="calc-dollar" placeholder="Enter rate" step="0.01">
+                            </div>
+                            <div class="rate-sep">÷</div>
+                            <div class="rate-input-group">
+                                <label for="calc-ounce">Ounce Rate</label>
+                                <input type="number" id="calc-ounce" value="31.1" step="0.01">
+                            </div>
+                            <div class="rate-sep">×</div>
+                            <div class="rate-input-group">
+                                <label for="calc-dirham">Dirham</label>
+                                <input type="number" id="calc-dirham" value="3.675" step="0.001">
+                            </div>
+                            <div class="rate-sep">×</div>
+                            <div class="rate-input-group">
+                                <label for="calc-purity">Purity</label>
+                                <input type="number" id="calc-purity" value="0.75" step="0.01">
+                            </div>
+                        </div>
+                        <div class="rate-result-block">
+                            <span class="rate-result-label">Per Gram</span>
+                            <span class="rate-result-value" id="calc-per-gram">0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calculation Table Card -->
+                <div class="card calc-product-card">
+                    <div class="card-header">
+                        <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/><line x1="8" y1="18" x2="12" y2="18"/></svg>
+                        </span>
+                        <h2 class="card-title">Product Prices</h2>
+                        <div style="display:flex;gap:10px;margin-left:auto;">
+                            <button class="btn btn-outline" id="add-calc-row-btn" style="padding:8px 12px">+ Add Product</button>
+                            <button class="btn btn-gradient green" id="download-calc-btn" style="padding:8px 12px;width:auto">⬇ Download</button>
+                        </div>
+                    </div>
+                    <div class="card-body scrollable">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Gold</th>
+                                    <th>Gold Price</th>
+                                    <th>Diamond</th>
+                                    <th>Other</th>
+                                    <th>Making</th>
+                                    <th class="th-highlight">Total</th>
+                                    <th class="th-highlight">Add %</th>
+                                    <th class="th-highlight">Percentage</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="calc-product-list"></tbody>
+                        </table>
+                        <div class="empty-state" id="calc-empty-state">
+                            <div class="empty-icon">🧾</div>
+                            <p>Click "+ Add Product" to begin.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

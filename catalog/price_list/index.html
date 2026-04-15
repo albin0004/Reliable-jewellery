@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price List</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .table-input {
+            background-color: rgba(255, 255, 255, 0.03);
+            color: inherit;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 6px 10px;
+            width: 100%;
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+        .table-input:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .table-input:focus {
+            outline: none;
+            border-color: #667eea;
+            background-color: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+        /* Highlight primary user inputs (Dollar and Percentage) */
+        #calc-dollar, .percentage-input {
+            border-color: #fde047 !important; /* Yellow highlights for primary actions */
+            background-color: rgba(252, 211, 77, 0.05) !important;
+            box-shadow: 0 0 8px rgba(252, 211, 77, 0.1);
+        }
+        #calc-dollar:focus, .percentage-input:focus {
+            box-shadow: 0 0 12px rgba(252, 211, 77, 0.3) !important;
+        }
+        /* Specific tweak for first column to remove extra space */
+        .data-table th:first-child,
+        .data-table td:first-child {
+            padding-left: 0 !important;
+        }
+        .data-table td:first-child .table-input {
+            padding-left: 4px; /* Minimal padding for text */
+        }
+        td {
+            vertical-align: middle;
+        }
+        .delete-btn {
+            background: transparent !important;
+            border: none !important;
+            padding: 8px;
+            cursor: pointer;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .delete-btn:hover {
+            transform: scale(1.15);
+            opacity: 0.8;
+        }
+        /* Remove number input arrows */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        /* Image styles */
+        .item-img-cell {
+            width: 60px;
+            text-align: center;
+        }
+        .item-thumb-container {
+            width: 45px;
+            height: 45px;
+            background: var(--surface-2);
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            overflow: visible;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+        }
+        .item-thumb {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 3px;
+            transition: transform 0.2s ease;
+        }
+        .item-thumb:hover {
+            opacity: 0.9;
+        }
+        
+        /* New Hover Preview Overlay */
+        #hover-preview {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            width: 500px;
+            max-width: 90vw;
+            height: 500px;
+            max-height: 80vh;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            z-index: 10000;
+            display: none;
+            overflow: hidden;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        #hover-preview.show {
+            display: flex;
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        #hover-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .upload-icon {
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        .item-thumb-container:hover .upload-icon {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+    <div id="live-toast" class="toast live" role="status" aria-live="polite"></div>
+    
+    <!-- Image Preview Overlay -->
+    <div id="hover-preview"><img src="" id="hover-preview-img"></div>
+
+    <header class="topnav">
+        <div class="topnav-inner">
+            <div class="brand">
+                <span class="brand-name">Reliable <strong>Jewellery</strong> - Price List</span>
+            </div>
+            <div class="topnav-right" style="display:flex; align-items:center;">
+                <div class="connection-pill">
+                    <span class="status-dot"></span>
+                    <span id="connection-text">Connecting…</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-body">
+        <div class="view active">
+            <div class="view-grid calc-grid">
+                
+                <!-- Rate Card -->
+                <div class="card rate-card">
+                    <div class="card-header">
+                        <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        </span>
+                        <h2 class="card-title">Dollar Rate Calculation</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="rate-inputs">
+                            <div class="rate-input-group">
+                                <label for="calc-dollar">Dollar ($)</label>
+                                <input type="number" id="calc-dollar" placeholder="Enter dollar rate" step="0.01">
+                            </div>
+                        </div>
+                        <div class="rate-result-block" style="margin-top: 15px;">
+                            <span class="rate-result-label">Price Per Gram</span>
+                            <span class="rate-result-value" id="calc-per-gram">0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Price List Card -->
+                <div class="card calc-product-card">
+                    <div class="card-header">
+                        <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/><line x1="8" y1="18" x2="12" y2="18"/></svg>
+                        </span>
+                        <h2 class="card-title">Presets</h2>
+                        <div style="display:flex;gap:10px;margin-left:auto;">
+                            <button class="btn btn-gradient green" id="add-item-btn" style="padding:8px 12px">+ Add Item</button>
+                        </div>
+                    </div>
+                    <div class="card-body scrollable">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th class="item-img-cell">Image</th>
+                                    <th style="min-width: 280px;">Item Name</th>
+                                    <th style="width: 100px;">Gold (g)</th>
+                                    <th style="width: 100px;">Diamond</th>
+                                    <th style="width: 100px;">Other</th>
+                                    <th style="width: 100px;">Making</th>
+                                    <th class="th-highlight">Cost</th>
+                                    <th class="th-highlight" style="width: 80px;">%</th>
+                                    <th class="th-highlight">Margin</th>
+                                    <th style="width: 50px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="price-list-tbody"></tbody>
+                        </table>
+                        <div class="empty-state" id="list-empty-state">
+                            <div class="empty-icon">🧾</div>
+                            <p>Click "+ Add Item" to begin.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="price_list.js"></script>
+</body>
+</html>

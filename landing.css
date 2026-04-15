@@ -209,15 +209,16 @@ body {
 /* Header */
 header {
     text-align: center;
-    padding: 4rem 1rem 2rem;
+    padding: 1.2rem 1rem 0.5rem;
     position: relative;
+    flex-shrink: 0;
 }
 
 h1 {
     font-family: 'Playfair Display', serif;
-    font-size: 3.5rem;
+    font-size: 2.2rem;
     font-weight: 700;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.2rem;
     background: var(--gradient-gold);
     -webkit-background-clip: text;
     background-clip: text;
@@ -228,7 +229,7 @@ h1 {
 
 .subtitle {
     color: var(--text-muted);
-    font-size: 1.1rem;
+    font-size: 0.9rem;
     font-weight: 300;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -237,21 +238,31 @@ h1 {
 
 /* Grid Container */
 .app-grid {
-    display: grid;
-    /* Force 4 columns on large screens to make a single horizontal row */
-    grid-template-columns: repeat(4, 1fr);
-    gap: 2rem;
-    max-width: 1600px;
-    margin: 2rem auto;
-    padding: 2rem;
-    width: 95%;
+    display: flex;
+    justify-content: center;
+    align-items: center; /* Centers cards vertically in the growing grid */
+    flex-wrap: wrap; /* Fallback for small screens */
+    gap: 1.5rem;
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 1rem 2rem;
+    width: 100%;
+    flex-grow: 1; /* Fills space between header and footer */
+}
+
+/* On desktop, keep them in one row */
+@media (min-width: 1024px) {
+    .app-grid {
+        flex-wrap: nowrap;
+    }
 }
 
 /* Responsive Breakpoints */
-@media (max-width: 1200px) {
+@media (max-width: 1023px) {
     .app-grid {
+        display: grid;
         grid-template-columns: repeat(2, 1fr);
-        max-width: 900px;
+        padding-bottom: 2rem;
     }
 }
 
@@ -267,8 +278,8 @@ h1 {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: var(--border-glass);
-    border-radius: 24px;
-    padding: 2.5rem 2rem;
+    border-radius: 20px;
+    padding: 2.5rem 1.8rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -279,6 +290,10 @@ h1 {
     text-decoration: none;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     animation: fadeInUp 0.8s ease-out backwards;
+    width: 280px; /* Optimal width for 5-column layout */
+    min-height: 380px; /* Structured height without being "stretched" */
+    flex-shrink: 0;
+    justify-content: space-between;
 }
 
 .card:nth-child(1) {
@@ -318,17 +333,18 @@ h1 {
 
 /* Card Icons */
 .icon-wrapper {
-    width: 70px;
-    height: 70px;
+    width: 50px;
+    height: 50px;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
     border: 1px solid rgba(212, 175, 55, 0.2);
     transition: all 0.3s ease;
     color: var(--gold-primary);
+    flex-shrink: 0;
 }
 
 .card:hover .icon-wrapper {
@@ -339,22 +355,22 @@ h1 {
 }
 
 .icon-wrapper svg {
-    width: 32px;
-    height: 32px;
+    width: 24px;
+    height: 24px;
     stroke-width: 1.5;
 }
 
 .card h2 {
     color: var(--text-main);
-    font-size: 1.5rem;
+    font-size: 1.15rem;
     font-weight: 500;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
 }
 
 .card p {
     color: var(--text-muted);
-    font-size: 0.95rem;
-    line-height: 1.6;
+    font-size: 0.85rem;
+    line-height: 1.4;
     margin-bottom: 2rem;
     flex-grow: 1;
 }
@@ -410,10 +426,11 @@ h1 {
 /* Footer */
 footer {
     margin-top: auto;
-    padding: 2rem;
+    padding: 1rem;
     text-align: center;
     color: rgba(255, 255, 255, 0.2);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    flex-shrink: 0;
 }
 
 @media (max-width: 768px) {
