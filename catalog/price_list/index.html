@@ -14,6 +14,7 @@
             border-radius: 6px;
             padding: 6px 10px;
             width: 100%;
+            min-width: 60px;
             box-sizing: border-box;
             font-family: inherit;
             font-size: 0.95rem;
@@ -115,12 +116,13 @@
             border: 2px solid var(--border);
             border-radius: 12px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-            z-index: 10000;
+            z-index: 100000;
             display: none;
             overflow: hidden;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.2s ease, transform 0.2s ease;
+            user-select: none;
         }
         #hover-preview.show {
             display: flex;
@@ -140,6 +142,53 @@
         }
         .item-thumb-container:hover .upload-icon {
             opacity: 1;
+        }
+        .table-input.locked {
+            border-color: transparent;
+            background: transparent !important;
+            cursor: default;
+            color: var(--text);
+            pointer-events: none;
+            box-shadow: none !important;
+        }
+        .cat-tab {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            color: var(--text-2);
+            padding: 6px 12px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .cat-tab.active {
+            background: var(--surface-2);
+            color: var(--text);
+            border-color: #667eea;
+        }
+        .cat-tab .badge {
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            margin-left: 6px;
+        }
+        .drag-handle {
+            cursor: grab;
+            color: var(--text-3);
+            display: none;
+            padding: 5px;
+        }
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+        .editing-order .drag-handle {
+            display: inline-flex;
         }
     </style>
 </head>
@@ -185,26 +234,40 @@
                         </div>
                         <div class="rate-result-block" style="margin-top: 15px;">
                             <span class="rate-result-label">Price Per Gram</span>
-                            <span class="rate-result-value" id="calc-per-gram">0.00</span>
+                            <span class="rate-result-value" id="calc-per-gram">-</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Price List Card -->
                 <div class="card calc-product-card">
-                    <div class="card-header">
-                        <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
-                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/><line x1="8" y1="18" x2="12" y2="18"/></svg>
-                        </span>
-                        <h2 class="card-title">Presets</h2>
-                        <div style="display:flex;gap:10px;margin-left:auto;">
-                            <button class="btn btn-gradient green" id="add-item-btn" style="padding:8px 12px">+ Add Item</button>
+                    <div class="card-header" style="flex-wrap: wrap;">
+                        <div style="display:flex; align-items:center; gap:10px; width:100%;">
+                            <span class="card-icon" style="background:var(--surface-2); color:var(--text); border:1px solid var(--border);">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/><line x1="8" y1="18" x2="12" y2="18"/></svg>
+                            </span>
+                            <h2 class="card-title">Items</h2>
+                            
+                            <div style="display:flex;gap:10px;margin-left:auto;">
+                                <button class="btn btn-outline" id="master-edit-btn" style="padding:8px 12px; display:flex; align-items:center; gap:5px; border-radius: 20px;">
+                                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121+0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                    <span class="hide-mobile">Edit Table</span>
+                                </button>
+                                <button class="btn btn-gradient green" id="add-item-btn" style="padding:8px 12px">+ Add Item</button>
+                            </div>
+                        </div>
+                        
+                        <div class="category-tabs" style="display:flex;gap:8px;width:100%;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+                            <button class="cat-tab active" data-cat="VC">VC <span class="badge" id="badge-vc">0</span></button>
+                            <button class="cat-tab" data-cat="Messika">Messika <span class="badge" id="badge-messika">0</span></button>
+                            <button class="cat-tab" data-cat="Other Jewellery">Other Jewellery <span class="badge" id="badge-other">0</span></button>
                         </div>
                     </div>
                     <div class="card-body scrollable">
                         <table class="data-table">
                             <thead>
                                 <tr>
+                                    <th id="reorder-col-header" style="width: 100px; text-align: center;">#</th>
                                     <th class="item-img-cell">Image</th>
                                     <th style="min-width: 280px;">Item Name</th>
                                     <th style="width: 100px;">Gold (g)</th>
@@ -231,6 +294,7 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="price_list.js"></script>
 </body>
 </html>
