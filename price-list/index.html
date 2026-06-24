@@ -226,10 +226,19 @@
                         <h2 class="card-title">Dollar Rate Calculation</h2>
                     </div>
                     <div class="card-body">
-                        <div class="rate-inputs">
-                            <div class="rate-input-group">
+                        <div class="rate-inputs" style="display:flex; gap:10px;">
+                            <div class="rate-input-group" style="flex:1;">
                                 <label for="calc-dollar">Dollar ($)</label>
                                 <input type="number" id="calc-dollar" placeholder="Enter dollar rate" step="0.01">
+                            </div>
+                            <div class="rate-input-group" style="flex:1;">
+                                <label for="purity-select">Purity</label>
+                                <select id="purity-select">
+                                    <option value="0.75">.750</option>
+                                    <option value="0.925">.925 Silver</option>
+                                    <option value="0.916">.916 (22K)</option>
+                                    <option value="0.583">.583 (14K)</option>
+                                </select>
                             </div>
                         </div>
                         <div class="rate-result-block" style="margin-top: 15px;">
@@ -260,6 +269,7 @@
                         <div class="category-tabs" style="display:flex;gap:8px;width:100%;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
                             <button class="cat-tab active" data-cat="VC">VC <span class="badge" id="badge-vc">0</span></button>
                             <button class="cat-tab" data-cat="Messika">Messika <span class="badge" id="badge-messika">0</span></button>
+                            <button class="cat-tab" data-cat="Silver">Silver <span class="badge" id="badge-silver">0</span></button>
                             <button class="cat-tab" data-cat="Other Jewellery">Other Jewellery <span class="badge" id="badge-other">0</span></button>
                         </div>
                     </div>

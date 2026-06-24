@@ -20,6 +20,8 @@ let reconnectTimer = null;
 
 let currentPerGram = 0;
 let isUnlocked = false;
+let uploadTargetId = null;
+let globalFileInput = null;
 
 // Preview DOM
 const hoverPreview = document.getElementById('hover-preview');
@@ -28,14 +30,14 @@ const hoverPreviewImg = document.getElementById('hover-preview-img');
 // Constants for hidden logic
 const OUNCE_RATE = 31.1;
 const DIRHAM_RATE = 3.675;
-const PURITY = 0.75;
+let PURITY = 0.75;
 
 // ==========================================
 // DOM References
 // ==========================================
 let toastEl, statusDot, connectionText, calcDollarInput, calcPerGramDisplay;
-let addItemBtn, priceListTbody, listEmptyState, badgeVc, badgeMessika, badgeOther;
-let catTabs, masterEditBtn;
+let addItemBtn, priceListTbody, listEmptyState, badgeVc, badgeMessika, badgeSilver, badgeOther;
+let catTabs, masterEditBtn, puritySelect;
 
 let currentCategory = 'VC';
 let isEditingOrder = false;
@@ -57,14 +59,23 @@ function init() {
     listEmptyState = document.getElementById('list-empty-state');
     badgeVc = document.getElementById('badge-vc');
     badgeMessika = document.getElementById('badge-messika');
+    badgeSilver = document.getElementById('badge-silver');
     badgeOther = document.getElementById('badge-other');
     catTabs = document.querySelectorAll('.cat-tab');
     masterEditBtn = document.getElementById('master-edit-btn');
+    puritySelect = document.getElementById('purity-select');
 
     setupInputs();
+    setupImageUpload();
     initSupabase();
     
-    // Load local dollar rate
+    // Load local dollar rate and purity
+    const savedPurity = localStorage.getItem('rj_price_list_purity');
+    if (savedPurity && puritySelect) {
+        puritySelect.value = savedPurity;
+        PURITY = parseFloat(savedPurity) || 0.75;
+    }
+
     const savedRate = localStorage.getItem('rj_price_list_dollar');
     if (savedRate && savedRate !== "0") {
         calcDollarInput.value = savedRate;
@@ -73,6 +84,25 @@ function init() {
         calcDollarInput.value = "";
         calcPerGramDisplay.textContent = "-";
     }
+
+    // Manual Reconnect Click
+    const connPill = document.querySelector('.connection-pill');
+    if (connPill) {
+        connPill.style.cursor = 'pointer';
+        connPill.title = 'Click to reconnect';
+        connPill.addEventListener('click', () => {
+            showToast("Refreshing connection...");
+            initSupabase();
+        });
+    }
+
+    // Auto-refresh data if offline
+    setInterval(() => {
+        if (!isConnected) {
+            console.log("Offline auto-refresh...");
+            fetchData();
+        }
+    }, 60000); // Check every minute if offline
 }
 
 function showToast(message, type = 'default', duration = 3000) {
@@ -87,7 +117,11 @@ function updateConnectionStatus(connected, label) {
         connectionText.textContent = label || 'Live';
         isConnected = true;
     } else {
-        statusDot.className = 'status-dot offline';
+        if (label === 'Reconnecting…' || label === 'Connecting…') {
+            statusDot.className = 'status-dot reconnecting';
+        } else {
+            statusDot.className = 'status-dot offline';
+        }
         connectionText.textContent = label || 'Offline Local';
         isConnected = false;
     }
@@ -162,9 +196,9 @@ function subscribeRealtime() {
             if (status === 'SUBSCRIBED') {
                 updateConnectionStatus(true, 'Live');
                 clearTimeout(reconnectTimer);
+                fetchData(); // Recover any data missed while offline
             } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
                 updateConnectionStatus(false, 'Reconnecting…');
-                statusDot.className = 'status-dot reconnecting';
                 clearTimeout(reconnectTimer);
                 reconnectTimer = setTimeout(subscribeRealtime, 4000);
             }
@@ -210,6 +244,13 @@ function handleChanges(payload) {
 
 function setupInputs() {
     calcDollarInput.addEventListener('input', calculatePerGram);
+    if (puritySelect) {
+        puritySelect.addEventListener('change', (e) => {
+            PURITY = parseFloat(e.target.value) || 0.75;
+            localStorage.setItem('rj_price_list_purity', e.target.value);
+            calculatePerGram();
+        });
+    }
     addItemBtn.addEventListener('click', () => {
         if (!isUnlocked) {
             const pin = prompt("Enter PIN to modify list:");
@@ -235,6 +276,25 @@ function setupInputs() {
     });
 
     if (masterEditBtn) masterEditBtn.addEventListener('click', toggleMasterEdit);
+}
+
+function setupImageUpload() {
+    globalFileInput = document.createElement('input');
+    globalFileInput.type = 'file';
+    globalFileInput.accept = 'image/*';
+    globalFileInput.style.display = 'none';
+    document.body.appendChild(globalFileInput);
+
+    globalFileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0] && uploadTargetId) {
+            uploadImage(uploadTargetId, e.target.files[0]);
+        }
+    });
+}
+
+function triggerUpload(id) {
+    uploadTargetId = id;
+    globalFileInput.click();
 }
 
 function toggleMasterEdit() {
@@ -472,6 +532,10 @@ async function uploadImage(id, file) {
         isUnlocked = true;
     }
 
+    if (!supabaseClient) {
+        return showToast("Cannot upload image in local/mock mode", "error");
+    }
+
     try {
         showToast("Uploading image...", "info");
         const fileExt = file.name.split('.').pop();
@@ -547,13 +611,14 @@ async function deleteItemRow(id) {
 // Rendering
 // ==========================================
 function updateBadges() {
-    let counts = { 'VC': 0, 'Messika': 0, 'Other Jewellery': 0 };
+    let counts = { 'VC': 0, 'Messika': 0, 'Silver': 0, 'Other Jewellery': 0 };
     priceListItems.forEach(i => {
         let cat = i.category || 'VC';
         if (counts[cat] !== undefined) counts[cat]++;
     });
     if (badgeVc) badgeVc.textContent = counts['VC'];
     if (badgeMessika) badgeMessika.textContent = counts['Messika'];
+    if (badgeSilver) badgeSilver.textContent = counts['Silver'];
     if (badgeOther) badgeOther.textContent = counts['Other Jewellery'];
 }
 
@@ -609,14 +674,14 @@ function renderTable() {
                     </div>
                 </td>
                 <td class="item-img-cell">
-                    <div class="item-thumb-container">
+                    <div class="item-thumb-container" ${item.isNew ? `onclick="triggerUpload(${item.id})"` : 'style="cursor: default;"'}>
                         ${item.image_url 
                             ? `<img src="${item.image_url}" class="item-thumb" alt="Product" 
                                     onmouseenter="showPreview('${item.image_url}')" 
                                     onmouseleave="hidePreview()"
-                                    onclick="event.preventDefault(); event.stopPropagation();"
+                                    ${item.isNew ? `onclick="event.preventDefault(); event.stopPropagation(); triggerUpload(${item.id})"` : 'style="cursor: default;"'}
                                     style="user-select:none; pointer-events:auto;">`
-                            : `<svg class="upload-icon" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m14-7l-5-5-5 5m5-5v12"/></svg>`}
+                            : `<svg class="upload-icon" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="${!item.isNew ? 'opacity: 0.15;' : ''}"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m14-7l-5-5-5 5m5-5v12"/></svg>`}
                     </div>
                 </td>
                 <td>

@@ -26,7 +26,15 @@ document.addEventListener('DOMContentLoaded', () => {
         marginPercent: 0,
         finalPrice: 0,
         sellingPrice: 0,
-        sellingMargin: 0
+        sellingMargin: 0,
+
+        // Gold with Stone
+        gsWeight: 0,
+        gsPurity: 0.750,
+        gsPureWeight: 0,
+        gsSaleAmount: 0,
+        gsProfit: 0,
+        gsProfitPercent: 0
     };
 
     // --- Elements ---
@@ -91,6 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const sellingPriceInput = document.getElementById('selling-price-input');
     const sellingMarginResult = document.getElementById('selling-margin-result');
 
+    // Section Gold with Stone
+    const gsToggle = document.getElementById('gs-toggle');
+    const gsContent = document.getElementById('gs-content');
+    const gsWeightInput = document.getElementById('gs-weight-input');
+    const gsPurityInput = document.getElementById('gs-purity-input');
+    const gsAnalysisBody = document.getElementById('gs-analysis-body');
+
     // Section 4
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -152,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         calcCosts();
         calcProfit();
         calcSellingMargin();
+        calcGoldWithStone();
     }
 
     // New functions for modular calculation
@@ -207,6 +223,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    const purityFactors = [0.75, 0.725, 0.7, 0.68, 0.675, 0.65, 0.6, 0.55];
+
+    function calcGoldWithStone() {
+        state.gsWeight = parseFloat(gsWeightInput.value) || 0;
+        state.gsPurity = parseFloat(gsPurityInput.value) || 0;
+
+        if (gsAnalysisBody) {
+            gsAnalysisBody.innerHTML = '';
+            
+            if (state.gsWeight > 0 && state.gsPurity > 0 && state.baseRate > 0) {
+                // Pure market rate per gram
+                const purePrice = state.baseRate / state.purity;
+                
+                // Cost Price = Stone Weight * Manual Purity * Current Market Rate
+                const costPrice = state.gsWeight * state.gsPurity * purePrice;
+
+                purityFactors.forEach(factor => {
+                    const pureWeight = state.gsWeight * factor;
+                    const saleAmount = pureWeight * purePrice;
+                    const profit = saleAmount - costPrice;
+
+                    const tr = document.createElement('tr');
+                    tr.className = "data-row";
+
+                    const profitColor = profit >= 0 ? '#10b981' : '#ef4444';
+
+                    tr.innerHTML = `
+                        <td style="text-align:center;">${factor}</td>
+                        <td style="text-align:center;">${pureWeight.toFixed(2)}</td>
+                        <td style="text-align:center;">${saleAmount.toFixed(2)}</td>
+                        <td style="text-align:center; color: ${profitColor}; font-weight: 600;">${profit.toFixed(2)}</td>
+                    `;
+                    gsAnalysisBody.appendChild(tr);
+                });
+            }
+        }
+    }
+
     function updatePriceRow(element, margin) {
         let final = 0;
         if (state.totalCost > 0) {
@@ -224,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listeners ---
 
     // Inputs (Added diamondWeightInput, sellingPriceInput, dirhamRateInput)
-    [usdInput, purityInput, dirhamRateInput, goldWeightInput, diamondWeightInput, diamondCostInput, stoneCostInput, otherCostInput, makingCostInput, customMarginInput, sellingPriceInput].forEach(input => {
+    [usdInput, purityInput, dirhamRateInput, goldWeightInput, diamondWeightInput, diamondCostInput, stoneCostInput, otherCostInput, makingCostInput, customMarginInput, sellingPriceInput, gsWeightInput, gsPurityInput].forEach(input => {
         input.addEventListener('input', debouncedCalculateAll);
     });
 
@@ -313,6 +367,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 pricingContent.classList.add('hidden');
             } else {
                 sellingContent.classList.add('hidden');
+            }
+        });
+    }
+
+    if (gsToggle) {
+        gsToggle.addEventListener('change', () => {
+            if (gsToggle.checked) {
+                gsContent.classList.remove('hidden');
+            } else {
+                gsContent.classList.add('hidden');
             }
         });
     }
