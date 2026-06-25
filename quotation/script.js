@@ -26,15 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         marginPercent: 0,
         finalPrice: 0,
         sellingPrice: 0,
-        sellingMargin: 0,
-
-        // Gold with Stone
-        gsWeight: 0,
-        gsPurity: 0.750,
-        gsPureWeight: 0,
-        gsSaleAmount: 0,
-        gsProfit: 0,
-        gsProfitPercent: 0
+        sellingMargin: 0
     };
 
     // --- Elements ---
@@ -99,13 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const sellingPriceInput = document.getElementById('selling-price-input');
     const sellingMarginResult = document.getElementById('selling-margin-result');
 
-    // Section Gold with Stone
-    const gsToggle = document.getElementById('gs-toggle');
-    const gsContent = document.getElementById('gs-content');
-    const gsWeightInput = document.getElementById('gs-weight-input');
-    const gsPurityInput = document.getElementById('gs-purity-input');
-    const gsAnalysisBody = document.getElementById('gs-analysis-body');
-
     // Section 4
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -167,7 +152,6 @@ document.addEventListener('DOMContentLoaded', () => {
         calcCosts();
         calcProfit();
         calcSellingMargin();
-        calcGoldWithStone();
     }
 
     // New functions for modular calculation
@@ -223,43 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    const purityFactors = [0.75, 0.725, 0.7, 0.68, 0.675, 0.65, 0.6, 0.55];
 
-    function calcGoldWithStone() {
-        state.gsWeight = parseFloat(gsWeightInput.value) || 0;
-        state.gsPurity = parseFloat(gsPurityInput.value) || 0;
-
-        if (gsAnalysisBody) {
-            gsAnalysisBody.innerHTML = '';
-            
-            if (state.gsWeight > 0 && state.gsPurity > 0 && state.baseRate > 0) {
-                // Pure market rate per gram
-                const purePrice = state.baseRate / state.purity;
-                
-                // Cost Price = Stone Weight * Manual Purity * Current Market Rate
-                const costPrice = state.gsWeight * state.gsPurity * purePrice;
-
-                purityFactors.forEach(factor => {
-                    const pureWeight = state.gsWeight * factor;
-                    const saleAmount = pureWeight * purePrice;
-                    const profit = saleAmount - costPrice;
-
-                    const tr = document.createElement('tr');
-                    tr.className = "data-row";
-
-                    const profitColor = profit >= 0 ? '#10b981' : '#ef4444';
-
-                    tr.innerHTML = `
-                        <td style="text-align:center;">${factor}</td>
-                        <td style="text-align:center;">${pureWeight.toFixed(2)}</td>
-                        <td style="text-align:center;">${saleAmount.toFixed(2)}</td>
-                        <td style="text-align:center; color: ${profitColor}; font-weight: 600;">${profit.toFixed(2)}</td>
-                    `;
-                    gsAnalysisBody.appendChild(tr);
-                });
-            }
-        }
-    }
 
     function updatePriceRow(element, margin) {
         let final = 0;
@@ -278,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listeners ---
 
     // Inputs (Added diamondWeightInput, sellingPriceInput, dirhamRateInput)
-    [usdInput, purityInput, dirhamRateInput, goldWeightInput, diamondWeightInput, diamondCostInput, stoneCostInput, otherCostInput, makingCostInput, customMarginInput, sellingPriceInput, gsWeightInput, gsPurityInput].forEach(input => {
+    [usdInput, purityInput, dirhamRateInput, goldWeightInput, diamondWeightInput, diamondCostInput, stoneCostInput, otherCostInput, makingCostInput, customMarginInput, sellingPriceInput].forEach(input => {
         input.addEventListener('input', debouncedCalculateAll);
     });
 
@@ -371,15 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (gsToggle) {
-        gsToggle.addEventListener('change', () => {
-            if (gsToggle.checked) {
-                gsContent.classList.remove('hidden');
-            } else {
-                gsContent.classList.add('hidden');
-            }
-        });
-    }
+
 
     // Dynamic Font Sizing Helper
     function fitTextToContainer(element, minSize = 12, maxSize = 24) {
@@ -399,6 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Actions
     const saveBtn = document.getElementById('save-btn');
     const shareBtn = document.getElementById('share-btn');
+    const whatsappBtn = document.getElementById('whatsapp-btn');
     const historySection = document.getElementById('history-section');
     const historyList = document.getElementById('history-list');
 
@@ -508,6 +449,238 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Share Logic ---
+    async function shareWhatsApp() {
+        console.log("WhatsApp sharing started");
+        const whatsappBtnIcon = whatsappBtn.querySelector('i');
+        const originalIcon = whatsappBtnIcon.className;
+
+        try {
+            // Feedback
+            whatsappBtnIcon.className = "fa-solid fa-spinner fa-spin";
+            whatsappBtn.childNodes[1].textContent = " Sharing...";
+
+            // 1. Prepare Data & Time
+            const date = new Date();
+            const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+            const timeStr = date.toLocaleTimeString('en-US', { timeZone: "Asia/Dubai", hour: '2-digit', minute: '2-digit', hour12: true });
+            document.getElementById('share-time').textContent = `${dateStr} | ${timeStr}`;
+
+            // 2. Populate Rate Conversion
+            document.getElementById('ex-usd').textContent = usdInput.value || "-";
+            document.getElementById('ex-purity').textContent = purityInput.value || "-";
+            document.getElementById('ex-rate').textContent = baseRateDisplay.textContent;
+
+            // 3. Populate Cost Analysis
+            const gUnit = document.getElementById('gold-unit').value || '';
+            const gWt = goldWeightInput.value || '';
+            document.getElementById('ex-gold-wt').textContent = gWt ? (gWt + ' ' + gUnit) : "-";
+            document.getElementById('ex-gold-cost').textContent = goldCostDisplay.textContent;
+
+            document.getElementById('ex-diamond-wt').textContent = diamondWeightInput.value || "-";
+            document.getElementById('ex-diamond-cost').textContent = diamondCostInput.value || "-";
+
+            document.getElementById('ex-stone-details').textContent = document.getElementById('stone-details').value || '';
+            document.getElementById('ex-stone-cost').textContent = stoneCostInput.value || "-";
+
+            const otherNameVal = document.getElementById('other-name').value || 'OTHER';
+            document.getElementById('ex-other-name').textContent = otherNameVal.toUpperCase();
+            document.getElementById('ex-other-details').textContent = document.getElementById('other-details').value || '';
+            document.getElementById('ex-other-cost').textContent = otherCostInput.value || "-";
+
+            document.getElementById('ex-making-details').textContent = document.getElementById('making-details').value || '';
+            document.getElementById('ex-making-cost').textContent = makingCostInput.value || "-";
+
+            // Dynamic Items Export
+            const exCostBody = document.querySelector('.cost-table-compact tbody');
+            const exTotalRow = document.querySelector('.cost-table-compact .total-row-compact');
+
+            // Clear previous dynamic rows in export
+            if (exCostBody) {
+                exCostBody.querySelectorAll('.ex-dynamic-row').forEach(r => r.remove());
+
+                document.querySelectorAll('.dynamic-row').forEach(row => {
+                    const name = row.querySelector('.dynamic-name').value || 'ITEM';
+                    const details = row.querySelector('.dynamic-details').value || '';
+                    const cost = row.querySelector('.dynamic-cost-input').value || '-';
+
+                    const tr = document.createElement('tr');
+                    tr.className = "ex-dynamic-row";
+                    tr.innerHTML = `
+                        <td style="text-align: center;">${name.toUpperCase()}</td>
+                        <td style="text-align: center;">${details}</td>
+                        <td style="text-align: center;">${cost}</td>
+                    `;
+                    exTotalRow ? exCostBody.insertBefore(tr, exTotalRow) : exCostBody.appendChild(tr);
+                });
+            }
+
+            document.getElementById('ex-total-cost').textContent = totalCostDisplay.textContent;
+
+            // 4. Populate Profit Table (Dynamic)
+            const profitBody = document.getElementById('ex-profit-body');
+            profitBody.innerHTML = '';
+
+            const exMarginCol = document.querySelector('.classic-margin-col');
+            exMarginCol.style.display = 'block';
+
+            const profitHeaders = document.querySelectorAll('.margin-table-compact thead th');
+            const costTableEl = document.querySelector('.cost-table-compact');
+            const splitRow = document.querySelector('.classic-split-row');
+
+            if (profitToggle.checked) {
+                profitHeaders[0].textContent = "Margin %";
+                profitHeaders[0].style.textAlign = "center";
+                profitHeaders[1].textContent = "Final Price";
+                profitHeaders[1].style.textAlign = "center";
+
+                costTableEl.style.marginBottom = "20px";
+                if (splitRow) splitRow.style.alignItems = "center";
+
+                const createProfitRow = (margin, priceElId) => {
+                    const tr = document.createElement('tr');
+                    const pEl = document.getElementById(priceElId);
+                    const price = pEl ? pEl.textContent : "0.00";
+                    tr.innerHTML = `<td style="text-align: center;">${margin}%</td><td style="text-align: center;">${price}</td>`;
+                    profitBody.appendChild(tr);
+                };
+
+                createProfitRow(15, 'price-15');
+                createProfitRow(20, 'price-20');
+                createProfitRow(25, 'price-25');
+                createProfitRow(30, 'price-30');
+                createProfitRow(35, 'price-35');
+
+                if (customMarginInput.value) {
+                    const tr = document.createElement('tr');
+                    const price = document.getElementById('price-custom').textContent;
+                    tr.innerHTML = `<td style="text-align: center;">${customMarginInput.value}%</td><td style="text-align: center;">${price}</td>`;
+                    profitBody.appendChild(tr);
+                }
+            } else if (sellingToggle && sellingToggle.checked) {
+                profitHeaders[0].textContent = "Selling Price";
+                profitHeaders[0].style.textAlign = "center";
+                profitHeaders[1].textContent = "Margin %";
+                profitHeaders[1].style.textAlign = "center";
+
+                costTableEl.style.marginBottom = "15px";
+                if (splitRow) splitRow.style.alignItems = "flex-start";
+
+                const marginVal = sellingMarginResult.textContent;
+                const sellPriceVal = sellingPriceInput.value ? parseFloat(sellingPriceInput.value).toFixed(2) : "0.00";
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td style="text-align: center; font-size:1.2rem; font-weight:bold;">${sellPriceVal}</td><td style="text-align: center; font-size:1.2rem; font-weight:bold; color:#d4af37;">${marginVal}</td>`;
+                profitBody.appendChild(tr);
+            } else {
+                exMarginCol.style.display = 'none';
+            }
+
+            // 5. Image & Reference & Customer
+            const imgContent = document.getElementById('image-preview');
+            const shareImgContainer = document.getElementById('share-image-container');
+            const refOutput = document.getElementById('ex-ref-no');
+            const refInput = document.getElementById('ref-input');
+            const custOutput = document.getElementById('ex-customer-name');
+
+            if (customerInput && customerInput.value.trim()) {
+                custOutput.textContent = customerInput.value;
+                custOutput.style.display = 'block';
+                fitTextToContainer(custOutput, 10, 26);
+            } else {
+                custOutput.style.display = 'none';
+            }
+
+            shareImgContainer.innerHTML = '';
+            if (imgContent && !imgContent.classList.contains('hidden') && imgContent.src) {
+                const imgClone = imgContent.cloneNode(true);
+                shareImgContainer.appendChild(imgClone);
+            } else {
+                shareImgContainer.innerHTML = '<span style="color:#ccc; font-size:0.8rem;">No Image</span>';
+            }
+
+            if (refInput && refInput.value.trim()) {
+                refOutput.textContent = "Ref: " + refInput.value;
+                refOutput.style.display = 'block';
+            } else {
+                refOutput.style.display = 'none';
+            }
+
+            // 6. Notes
+            const noteInput = document.getElementById('note-input');
+            const noteOutput = document.getElementById('ex-note-content');
+            if (noteInput && noteInput.value.trim()) {
+                noteOutput.textContent = noteInput.value;
+                noteOutput.style.display = 'block';
+            } else {
+                noteOutput.textContent = 'No notes provided.';
+                noteOutput.style.color = '#777';
+                noteOutput.style.padding = '5px';
+            }
+
+            // 7. Capture (Seamless)
+            const container = document.getElementById('share-export-container');
+            const canvas = await html2canvas(container, {
+                scale: 3,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+                width: 800,
+                windowWidth: 800,
+                onclone: (clonedDoc) => {
+                    const clonedContainer = clonedDoc.getElementById('share-export-container');
+                    if (clonedContainer) {
+                        clonedContainer.style.left = "0px";
+                        clonedContainer.style.top = "0px";
+                        clonedContainer.style.visibility = "visible";
+                    }
+                }
+            });
+
+            // 8. Convert to File and Share Natively
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    alert("Failed to generate image.");
+                    return;
+                }
+
+                const file = new File([blob], `Quotation_${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Reliable Jewellery Quotation',
+                            text: 'Reliable Jewellery Quotation'
+                        });
+                    } catch (shareErr) {
+                        // Log share failure but don't force alerts if user just cancelled
+                        console.log("Native share cancelled or failed:", shareErr);
+                    }
+                } else {
+                    // Fallback for desktop: Download JPG directamente
+                    const link = document.createElement('a');
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    link.download = `Quotation_${timestamp}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 1.0);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    alert("Direct sharing is only supported on mobile devices. Quotation has been downloaded as a JPG instead.");
+                }
+
+                // Restore Button
+                whatsappBtnIcon.className = originalIcon;
+                whatsappBtn.childNodes[1].textContent = " Share on WhatsApp";
+            }, 'image/jpeg', 1.0);
+
+        } catch (err) {
+            console.error("Export Error:", err);
+            alert('Failed to share image. Please check console.');
+            whatsappBtnIcon.className = originalIcon;
+            whatsappBtn.childNodes[1].textContent = " Share on WhatsApp";
+        }
+    }
+
     // --- Share Logic ---
     async function shareResult() {
         console.log("Share button clicked");
@@ -731,6 +904,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     saveBtn.addEventListener('click', saveHistory);
     shareBtn.addEventListener('click', shareResult);
+    if (whatsappBtn) {
+        whatsappBtn.addEventListener('click', shareWhatsApp);
+    }
 
     // Init History
     renderHistory();

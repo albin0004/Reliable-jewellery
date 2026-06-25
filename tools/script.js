@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const c3UploadPlaceholder = document.getElementById('purity-upload-placeholder');
     const c3NoteInput = document.getElementById('purity-note-input');
     const c3DownloadBtn = document.getElementById('purity-download-btn');
+    const c3WhatsappBtn = document.getElementById('purity-whatsapp-btn');
 
 
     // --- Initialization ---
@@ -127,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Downloads
     if (c2ShareBtn) c2ShareBtn.addEventListener('click', downloadSalesAnalysis);
     if (c3DownloadBtn) c3DownloadBtn.addEventListener('click', downloadPurityReceipt);
+    if (c3WhatsappBtn) c3WhatsappBtn.addEventListener('click', sharePurityWhatsApp);
 
 
     // --- Functions ---
@@ -291,6 +293,10 @@ document.addEventListener('DOMContentLoaded', () => {
                      <span class="purity-point-label">Pure Wt</span>
                      <span class="purity-point-value">${parseFloat(pureWeight.toFixed(3))}</span>
                 </div>
+                <div class="purity-data-point">
+                     <span class="purity-point-label">Sale Amt</span>
+                     <span class="purity-point-value">${saleAmount.toFixed(2)}</span>
+                </div>
                 <div class="purity-data-point end">
                      <span class="purity-point-label">Profit %</span>
                      <span class="purity-point-value highlight" style="color:${profitColor}">${profitPercent.toFixed(2)}%</span>
@@ -388,7 +394,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Extract Data
                     const p = card.querySelector('.purity-id').innerText.trim();
                     const pw = card.querySelectorAll('.purity-point-value')[1].innerText.trim();
-                    const prof = card.querySelectorAll('.purity-point-value')[2].innerText.trim();
+                    const sa = card.querySelectorAll('.purity-point-value')[2].innerText.trim();
+                    const prof = card.querySelectorAll('.purity-point-value')[3].innerText.trim();
 
                     // Determine Color (Mint Green / Red)
                     const rawProfitText = prof.replace('%', '');
@@ -398,6 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     row.innerHTML = `
                         <div class="col-purity" style="color: #000000; font-weight: 500;">${p}</div>
                         <div class="col-weight" style="color: #000000; font-weight: 500;">${pw}</div>
+                        <div class="col-sale-amount" style="color: #000000; font-weight: 500;">${sa}</div>
                         <div class="col-profit" style="color: #000000; font-weight: 500;">${prof}</div>
                     `;
                     recBody.appendChild(row);
@@ -440,6 +448,116 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Error generating receipt');
         } finally {
             c3DownloadBtn.innerHTML = originalText;
+        }
+    }
+
+    async function sharePurityWhatsApp() {
+        if (!c3WhatsappBtn) return;
+        const originalText = c3WhatsappBtn.innerHTML;
+        c3WhatsappBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sharing...';
+
+        try {
+            // Setup Receipt
+            const now = new Date();
+            document.getElementById('receipt-date').textContent = now.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Dubai' });
+            document.getElementById('receipt-time').textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' });
+
+            // Image
+            const recImg = document.getElementById('receipt-image-container');
+            if (!c3ImagePreview.classList.contains('hidden') && c3ImagePreview.src) {
+                recImg.innerHTML = `<img src="${c3ImagePreview.src}">`;
+                recImg.classList.remove('hidden');
+            } else {
+                recImg.classList.add('hidden');
+                recImg.innerHTML = '';
+            }
+
+            // Results Table
+            const recBody = document.getElementById('receipt-grid-body');
+            recBody.innerHTML = '';
+            const cards = c3PurityResultsContainer.querySelectorAll('.purity-card');
+
+            if (cards.length === 0) {
+                recBody.innerHTML = '<div style="padding:40px; text-align:center; font-size:1.5rem; color:#666;">No Calculation Data</div>';
+            } else {
+                cards.forEach(card => {
+                    const row = document.createElement('div');
+                    row.className = 'exp-row';
+
+                    const p = card.querySelector('.purity-id').innerText.trim();
+                    const pw = card.querySelectorAll('.purity-point-value')[1].innerText.trim();
+                    const sa = card.querySelectorAll('.purity-point-value')[2].innerText.trim();
+                    const prof = card.querySelectorAll('.purity-point-value')[3].innerText.trim();
+
+                    const rawProfitText = prof.replace('%', '');
+                    const isPositive = parseFloat(rawProfitText) >= 0;
+                    const profColor = isPositive ? '#88D8B0' : '#ff3b30';
+
+                    row.innerHTML = `
+                        <div class="col-purity" style="color: #000000; font-weight: 500;">${p}</div>
+                        <div class="col-weight" style="color: #000000; font-weight: 500;">${pw}</div>
+                        <div class="col-sale-amount" style="color: #000000; font-weight: 500;">${sa}</div>
+                        <div class="col-profit" style="color: #000000; font-weight: 500;">${prof}</div>
+                    `;
+                    recBody.appendChild(row);
+                });
+            }
+
+            // Notes
+            const noteVal = c3NoteInput.value.trim();
+            const noteSec = document.getElementById('receipt-note-section');
+            if (noteVal) {
+                document.getElementById('receipt-note-text').textContent = noteVal;
+                noteSec.classList.remove('hidden');
+            } else {
+                noteSec.classList.add('hidden');
+            }
+
+            // Capture
+            const container = document.getElementById('purity-download-container');
+            const canvas = await html2canvas(container, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                logging: false,
+            });
+
+            // Convert to file and share natively
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    alert("Failed to generate image.");
+                    return;
+                }
+
+                const file = new File([blob], `Reliable_Purity_${Date.now()}.jpg`, { type: 'image/jpeg' });
+
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Reliable Jewellery Purity Analysis',
+                            text: 'Reliable Jewellery Purity Analysis'
+                        });
+                    } catch (shareErr) {
+                        console.log("Native share cancelled or failed:", shareErr);
+                    }
+                } else {
+                    // Fallback for desktop: Download
+                    const link = document.createElement('a');
+                    link.download = `Reliable_Purity_${Date.now()}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 1.0);
+                    link.click();
+                    alert("Direct sharing is only supported on mobile devices. Report has been downloaded as a JPG instead.");
+                }
+
+                // Restore Button
+                c3WhatsappBtn.innerHTML = originalText;
+            }, 'image/jpeg', 1.0);
+
+        } catch (err) {
+            console.error("WhatsApp Share Error:", err);
+            alert('Failed to share image. Please check console.');
+            c3WhatsappBtn.innerHTML = originalText;
         }
     }
 
