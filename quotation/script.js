@@ -648,9 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
                         await navigator.share({
-                            files: [file],
-                            title: 'Reliable Jewellery Quotation',
-                            text: 'Reliable Jewellery Quotation'
+                            files: [file]
                         });
                     } catch (shareErr) {
                         // Log share failure but don't force alerts if user just cancelled

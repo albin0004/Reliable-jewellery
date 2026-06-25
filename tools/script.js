@@ -534,9 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
                         await navigator.share({
-                            files: [file],
-                            title: 'Reliable Jewellery Purity Analysis',
-                            text: 'Reliable Jewellery Purity Analysis'
+                            files: [file]
                         });
                     } catch (shareErr) {
                         console.log("Native share cancelled or failed:", shareErr);
