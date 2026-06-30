@@ -33,6 +33,26 @@ const DIRHAM_RATE = 3.675;
 let PURITY = 0.75;
 
 // ==========================================
+// Item Name / With Stone Parsers
+// ==========================================
+function parseItemName(fullName) {
+    if (!fullName) return { name: '', withStone: '' };
+    const match = fullName.match(/^(.*?)\s*\[with_stone:([\d.]+)\]$/);
+    if (match) {
+        return { name: match[1].trim(), withStone: match[2] };
+    }
+    return { name: fullName.trim(), withStone: '' };
+}
+
+function serializeItemName(name, withStone) {
+    const cleanName = name.trim();
+    if (withStone !== undefined && withStone !== null && withStone !== '') {
+        return `${cleanName} [with_stone:${withStone}]`;
+    }
+    return cleanName;
+}
+
+// ==========================================
 // DOM References
 // ==========================================
 let toastEl, statusDot, connectionText, calcDollarInput, calcPerGramDisplay;
@@ -365,7 +385,7 @@ function toggleEditOrder() {
             animation: 150,
             handle: '.drag-handle',
             onEnd: async function () {
-                const rows = Array.from(priceListTbody.querySelectorAll('tr'));
+                const rows = Array.from(priceListTbody.querySelectorAll('tr:not(.sub-item-row)'));
                 let updates = [];
                 rows.forEach((row, index) => {
                     const id = row.id.replace('row-', '');
@@ -509,6 +529,22 @@ async function updateItem(id, field, value) {
     }
 }
 
+async function updateItemName(id, cleanName) {
+    const item = priceListItems.find(i => i.id === id);
+    if (!item) return;
+    const parsed = parseItemName(item.item_name);
+    const serialized = serializeItemName(cleanName, parsed.withStone);
+    await updateItem(id, 'item_name', serialized);
+}
+
+async function updateItemWithStone(id, withStoneValue) {
+    const item = priceListItems.find(i => i.id === id);
+    if (!item) return;
+    const parsed = parseItemName(item.item_name);
+    const serialized = serializeItemName(parsed.name, withStoneValue);
+    await updateItem(id, 'item_name', serialized);
+}
+
 function showSaveStatus(id) {
     const el = document.getElementById(`save-status-${id}`);
     if (el) {
@@ -611,22 +647,24 @@ async function deleteItemRow(id) {
 // Rendering
 // ==========================================
 function updateBadges() {
-    let counts = { 'VC': 0, 'Messika': 0, 'Silver': 0, 'Other Jewellery': 0 };
+    let counts = { 'VC': 0, 'Messika': 0, 'Silver': 0, 'Other Jewellery': 0, 'per gram': 0 };
     priceListItems.forEach(i => {
-        let cat = i.category || 'VC';
+        let cat = (i.category || 'VC').trim();
         if (counts[cat] !== undefined) counts[cat]++;
     });
     if (badgeVc) badgeVc.textContent = counts['VC'];
     if (badgeMessika) badgeMessika.textContent = counts['Messika'];
     if (badgeSilver) badgeSilver.textContent = counts['Silver'];
     if (badgeOther) badgeOther.textContent = counts['Other Jewellery'];
+    const badgePerGram = document.getElementById('badge-per-gram');
+    if (badgePerGram) badgePerGram.textContent = counts['per gram'];
 }
 
 function renderTable() {
     updateBadges();
 
     const filteredItems = priceListItems
-        .filter(i => (i.category || 'VC') === currentCategory)
+        .filter(i => (i.category || 'VC').trim() === currentCategory)
         .sort((a, b) => {
             const indexA = a.order_index ?? Number.MAX_SAFE_INTEGER;
             const indexB = b.order_index ?? Number.MAX_SAFE_INTEGER;
@@ -651,6 +689,8 @@ function renderTable() {
     listEmptyState.classList.toggle('hidden', filteredItems.length > 0);
     
     const rows = filteredItems.map((item, index) => {
+        const parsed = parseItemName(item.item_name);
+
         // Calculations
         const goldPrice = currentPerGram * (parseFloat(item.gold_weight) || 0);
         const cost = goldPrice + (parseFloat(item.diamond_cost) || 0) + (parseFloat(item.other_cost) || 0) + (parseFloat(item.making_charges) || 0);
@@ -685,12 +725,16 @@ function renderTable() {
                     </div>
                 </td>
                 <td>
-                    <input type="text" class="${inputClass}" value="${item.item_name}" 
-                           ${isReadOnly} onchange="updateItem(${item.id}, 'item_name', this.value)" placeholder="Item Name">
+                    <input type="text" class="${inputClass}" value="${parsed.name}" 
+                           ${isReadOnly} onchange="updateItemName(${item.id}, this.value)" placeholder="Item Name">
                 </td>
                 <td>
                     <input type="number" class="${inputClass}" value="${item.gold_weight || ''}" step="0.01" 
                            ${isReadOnly} oninput="updateItem(${item.id}, 'gold_weight', this.value)" placeholder="0.00">
+                </td>
+                <td>
+                    <input type="number" class="${inputClass}" value="${parsed.withStone || ''}" step="0.01" 
+                           ${isReadOnly} onchange="updateItemWithStone(${item.id}, this.value)" placeholder="0.00">
                 </td>
                 <td>
                     <input type="number" class="${inputClass}" value="${item.diamond_cost || ''}" step="0.01" 
@@ -731,7 +775,6 @@ function renderTable() {
             </tr>
         `;
     }).join('');
-
     priceListTbody.innerHTML = rows;
 }
 
