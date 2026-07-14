@@ -168,19 +168,8 @@
                     <line x1="12" y1="16" x2="12.01" y2="16"></line>
                 </svg>
             </div>
-            <h2>Access Restriction</h2>
-            <p>Your Google account is not whitelisted to access these tools:</p>
-            
-            <div class="email-display" id="email-box">loading...</div>
-
-            <p>If you need access to this system, please copy your email above and request your administrator to whitelist it in the Firebase console database.</p>
-
-            <div class="actions-group">
-                <button class="btn-action btn-primary" id="request-btn">Request Whitelisting</button>
-                <button class="btn-action btn-secondary" id="logout-btn">Sign Out / Try Another Account</button>
-            </div>
-
-            <div class="status-msg" id="status-text">Whitelisting request logged! Please contact the admin.</div>
+            <h2>Access Denied</h2>
+            <p>You do not have permission to access this portal.</p>
         </div>
     </main>
 
@@ -188,75 +177,7 @@
         &copy; 2026 Reliable Jewellery. Crafted for Excellence.
     </footer>
 
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    
-    <!-- Firebase config initialization -->
-    <script src="firebase-config.js"></script>
-
-    <script>
-        const emailBox = document.getElementById('email-box');
-        const logoutBtn = document.getElementById('logout-btn');
-        const requestBtn = document.getElementById('request-btn');
-        const statusText = document.getElementById('status-text');
-
-        // Extract email from query string or use authenticated user
-        const urlParams = new URLSearchParams(window.location.search);
-        let userEmail = urlParams.get('email') || "";
-
-        if (userEmail) {
-            emailBox.textContent = userEmail;
-        }
-
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                userEmail = user.email;
-                emailBox.textContent = userEmail;
-            } else if (!userEmail) {
-                // If not signed in and no email parameter, redirect back to login
-                window.location.href = 'login.html';
-            }
-        });
-
-        logoutBtn.addEventListener('click', async () => {
-            try {
-                await auth.signOut();
-                window.location.href = 'login.html';
-            } catch (err) {
-                console.error("Sign-out error:", err);
-                // Clear cookies/localStorage and redirect as failsafe
-                window.location.href = 'login.html';
-            }
-        });
-
-        requestBtn.addEventListener('click', async () => {
-            if (!userEmail) return;
-            
-            try {
-                // Try writing a request log to a Firestore requests collection (if it exists)
-                // Note: The rule for `pending_requests` collection can be allowed for writes by anyone.
-                // We'll write to a "pending_requests" collection. Even if rules block it, we gracefully fallback
-                const db = firebase.firestore();
-                await db.collection('pending_requests').doc(userEmail.toLowerCase()).set({
-                    email: userEmail,
-                    requested_at: firebase.firestore.FieldValue.serverTimestamp(),
-                    status: 'pending'
-                });
-                
-                statusText.style.display = 'block';
-                requestBtn.disabled = true;
-                requestBtn.style.opacity = '0.5';
-            } catch (err) {
-                console.warn("Could not save request in DB (likely rules restrict it):", err);
-                // Display success message anyway, since they can contact admin directly
-                statusText.textContent = "Please share the email shown above directly with your administrator.";
-                statusText.style.color = "#D4AF37";
-                statusText.style.display = 'block';
-            }
-        });
-    </script>
+    <!-- Firebase config initialization (Not needed on plain page) -->
 </body>
 
 </html>
