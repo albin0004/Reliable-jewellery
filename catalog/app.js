@@ -1109,9 +1109,39 @@ function setupCalculator() {
         input?.addEventListener('input', calculatePerGram);
     });
     addCalcRowBtn?.addEventListener('click', addCalcRow);
+
+    // Sync Dollar Rate via Firebase Firestore
+    try {
+        const db = firebase.firestore();
+        db.collection('settings').doc('global').onSnapshot(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                if (data.dollarRate !== undefined && document.activeElement !== calcDollarInput) {
+                    calcDollarInput.value = data.dollarRate;
+                    calculatePerGram(false);
+                }
+            } else {
+                const savedRate = localStorage.getItem('rj_price_list_dollar');
+                if (savedRate && savedRate !== "0" && calcDollarInput) {
+                    calcDollarInput.value = savedRate;
+                    calculatePerGram(true);
+                }
+            }
+        }, err => {
+            console.error("Firestore sync error:", err);
+            const savedRate = localStorage.getItem('rj_price_list_dollar');
+            if (savedRate && savedRate !== "0" && calcDollarInput && !calcDollarInput.value) {
+                calcDollarInput.value = savedRate;
+                calculatePerGram(false);
+            }
+        });
+    } catch(e) {
+        console.error("Firebase not initialized for settings", e);
+    }
 }
 
-function calculatePerGram() {
+function calculatePerGram(eventOrSync = true) {
+    const shouldSync = eventOrSync !== false;
     const dollar = parseFloat(calcDollarInput?.value) || 0;
     const ounce  = parseFloat(calcOunceInput?.value)  || 31.1;
     const dirham = parseFloat(calcDirhamInput?.value) || 3.675;
@@ -1126,6 +1156,13 @@ function calculatePerGram() {
         calcPerGramDisplay.classList.remove('updated');
         void calcPerGramDisplay.offsetWidth;
         calcPerGramDisplay.classList.add('updated');
+    }
+
+    if (shouldSync && calcDollarInput) {
+        localStorage.setItem('rj_price_list_dollar', dollar || "");
+        try {
+            firebase.firestore().collection('settings').doc('global').set({ dollarRate: dollar || "" }, { merge: true }).catch(console.error);
+        } catch(e) {}
     }
 
     recalculateAllCalcRows();

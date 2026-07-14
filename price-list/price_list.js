@@ -96,13 +96,33 @@ function init() {
         PURITY = parseFloat(savedPurity) || 0.75;
     }
 
-    const savedRate = localStorage.getItem('rj_price_list_dollar');
-    if (savedRate && savedRate !== "0") {
-        calcDollarInput.value = savedRate;
-        calculatePerGram();
-    } else {
-        calcDollarInput.value = "";
-        calcPerGramDisplay.textContent = "-";
+    // Sync Dollar Rate via Firebase Firestore
+    try {
+        const db = firebase.firestore();
+        db.collection('settings').doc('global').onSnapshot(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                if (data.dollarRate !== undefined && document.activeElement !== calcDollarInput) {
+                    calcDollarInput.value = data.dollarRate;
+                    calculatePerGram(false);
+                }
+            } else {
+                const savedRate = localStorage.getItem('rj_price_list_dollar');
+                if (savedRate && savedRate !== "0" && calcDollarInput) {
+                    calcDollarInput.value = savedRate;
+                    calculatePerGram(true);
+                }
+            }
+        }, err => {
+            console.error("Firestore sync error:", err);
+            const savedRate = localStorage.getItem('rj_price_list_dollar');
+            if (savedRate && savedRate !== "0" && calcDollarInput && !calcDollarInput.value) {
+                calcDollarInput.value = savedRate;
+                calculatePerGram(false);
+            }
+        });
+    } catch (e) {
+        console.error("Firebase not initialized for settings", e);
     }
 
     // Manual Reconnect Click
@@ -441,13 +461,17 @@ function requirePin(el) {
     }
 }
 
-function calculatePerGram() {
+function calculatePerGram(eventOrSync = true) {
+    const shouldSync = eventOrSync !== false;
     const val = calcDollarInput.value;
     if (val === "" || val === null) {
         currentDollarRate = 0;
         currentPerGram = 0;
         calcPerGramDisplay.textContent = "-";
         localStorage.removeItem('rj_price_list_dollar');
+        if (shouldSync) {
+            try { firebase.firestore().collection('settings').doc('global').set({ dollarRate: "" }, { merge: true }).catch(console.error); } catch(e) {}
+        }
         renderTable();
         return;
     }
@@ -455,6 +479,9 @@ function calculatePerGram() {
     currentPerGram = (currentDollarRate / OUNCE_RATE) * DIRHAM_RATE * PURITY;
     calcPerGramDisplay.textContent = currentPerGram.toFixed(2);
     localStorage.setItem('rj_price_list_dollar', currentDollarRate);
+    if (shouldSync) {
+        try { firebase.firestore().collection('settings').doc('global').set({ dollarRate: currentDollarRate }, { merge: true }).catch(console.error); } catch(e) {}
+    }
     renderTable(); // Update derived values in table
 }
 
