@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Denied | Reliable Jewellery Tools</title>
+    <link rel="stylesheet" href="landing.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#D4AF37">
+    <meta name="description" content="Unauthorized user warning page.">
+    <style>
+        .denied-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 120px);
+            padding: 20px;
+            flex-grow: 1;
+        }
+
+        .denied-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 460px;
+            width: 100%;
+            text-align: center;
+            box-shadow: var(--shadow-card);
+            transition: transform 0.3s ease;
+        }
+
+        .denied-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .denied-logo {
+            margin-bottom: 25px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .denied-card h2 {
+            font-family: 'Outfit', serif;
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            color: #ef4444;
+            font-weight: 700;
+        }
+
+        .email-display {
+            background: rgba(255, 255, 255, 0.05);
+            border: var(--border-glass);
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-family: monospace;
+            font-size: 0.95rem;
+            color: var(--gold-light);
+            margin: 15px 0 25px 0;
+            word-break: break-all;
+            display: inline-block;
+        }
+
+        .denied-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .actions-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background: var(--gradient-gold);
+            border: none;
+            color: #000;
+            font-weight: 600;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .status-msg {
+            font-size: 0.85rem;
+            color: #10b981;
+            margin-top: 15px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Ambient / Dynamic Background -->
+    <div class="bg-container">
+        <div class="bg-orb orb-1"></div>
+        <div class="bg-orb orb-2"></div>
+        <div class="floating-shape shape-diamond"></div>
+        <div class="floating-shape shape-circle"></div>
+        <div class="floating-shape shape-gem"></div>
+    </div>
+
+    <header>
+        <h1>Reliable Jewellery</h1>
+        <p class="subtitle">Secure Verification System</p>
+    </header>
+
+    <main class="denied-container">
+        <div class="denied-card">
+            <div class="denied-logo">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+            </div>
+            <h2>Access Restriction</h2>
+            <p>Your Google account is not whitelisted to access these tools:</p>
+            
+            <div class="email-display" id="email-box">loading...</div>
+
+            <p>If you need access to this system, please copy your email above and request your administrator to whitelist it in the Firebase console database.</p>
+
+            <div class="actions-group">
+                <button class="btn-action btn-primary" id="request-btn">Request Whitelisting</button>
+                <button class="btn-action btn-secondary" id="logout-btn">Sign Out / Try Another Account</button>
+            </div>
+
+            <div class="status-msg" id="status-text">Whitelisting request logged! Please contact the admin.</div>
+        </div>
+    </main>
+
+    <footer>
+        &copy; 2026 Reliable Jewellery. Crafted for Excellence.
+    </footer>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Firebase config initialization -->
+    <script src="firebase-config.js"></script>
+
+    <script>
+        const emailBox = document.getElementById('email-box');
+        const logoutBtn = document.getElementById('logout-btn');
+        const requestBtn = document.getElementById('request-btn');
+        const statusText = document.getElementById('status-text');
+
+        // Extract email from query string or use authenticated user
+        const urlParams = new URLSearchParams(window.location.search);
+        let userEmail = urlParams.get('email') || "";
+
+        if (userEmail) {
+            emailBox.textContent = userEmail;
+        }
+
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                userEmail = user.email;
+                emailBox.textContent = userEmail;
+            } else if (!userEmail) {
+                // If not signed in and no email parameter, redirect back to login
+                window.location.href = 'login.html';
+            }
+        });
+
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await auth.signOut();
+                window.location.href = 'login.html';
+            } catch (err) {
+                console.error("Sign-out error:", err);
+                // Clear cookies/localStorage and redirect as failsafe
+                window.location.href = 'login.html';
+            }
+        });
+
+        requestBtn.addEventListener('click', async () => {
+            if (!userEmail) return;
+            
+            try {
+                // Try writing a request log to a Firestore requests collection (if it exists)
+                // Note: The rule for `pending_requests` collection can be allowed for writes by anyone.
+                // We'll write to a "pending_requests" collection. Even if rules block it, we gracefully fallback
+                const db = firebase.firestore();
+                await db.collection('pending_requests').doc(userEmail.toLowerCase()).set({
+                    email: userEmail,
+                    requested_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    status: 'pending'
+                });
+                
+                statusText.style.display = 'block';
+                requestBtn.disabled = true;
+                requestBtn.style.opacity = '0.5';
+            } catch (err) {
+                console.warn("Could not save request in DB (likely rules restrict it):", err);
+                // Display success message anyway, since they can contact admin directly
+                statusText.textContent = "Please share the email shown above directly with your administrator.";
+                statusText.style.color = "#D4AF37";
+                statusText.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+
+</html>

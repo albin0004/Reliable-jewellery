@@ -2,6 +2,14 @@
 <html lang="en">
 
 <head>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- Firebase Config & Auth Shield -->
+    <script src="./firebase-config.js"></script>
+    <script src="./auth-shield.js"></script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -136,7 +144,15 @@
 
     <footer>
         &copy; 2026 Reliable Jewellery. Crafted for Excellence. <!-- v1.1.0 -->
+        <br>
+        <button id="logout-btn" style="background:none; border:none; color:var(--gold-primary); cursor:pointer; font-family:inherit; margin-top:8px; text-decoration:underline; font-size:0.9rem;">Sign Out</button>
     </footer>
+
+    <script>
+        document.getElementById('logout-btn')?.addEventListener('click', () => {
+            auth.signOut().then(() => window.location.reload());
+        });
+    </script>
 
     <script>
         if ('serviceWorker' in navigator) {
