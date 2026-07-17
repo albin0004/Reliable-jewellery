@@ -28,7 +28,35 @@ document.addEventListener('DOMContentLoaded', () => {
         { usd: 500, mm: 3.00, ct: 0.108 },
     ];
 
-    let rows = initialData.map((d, index) => ({
+    // --- Local Storage Persistence ---
+    const STORAGE_KEY = 'diamond_rate_convention_rows';
+
+    function loadSavedRows() {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load saved diamond rows:', e);
+        }
+        return null;
+    }
+
+    function saveRowsToLocalStorage() {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+        } catch (e) {
+            console.error('Failed to save diamond rows:', e);
+        }
+    }
+
+    const savedRows = loadSavedRows();
+
+    let rows = savedRows ? savedRows : initialData.map((d, index) => ({
         id: Date.now() + index,
         usdRate: d.usd,
         mm: d.mm,
@@ -60,17 +88,60 @@ document.addEventListener('DOMContentLoaded', () => {
     const totalWeightDisplay = document.getElementById('total-weight-display');
     const totalPriceDisplay = document.getElementById('total-price-display');
 
-    // Color Palette
+    // Extended Color Palette for Rate Grouping (Glassmorphism aesthetics)
     const colorPalette = [
-        'rgba(56, 189, 248, 0.15)', // Sky
+        'rgba(56, 189, 248, 0.15)',  // Sky Blue
         'rgba(168, 85, 247, 0.15)', // Purple
         'rgba(244, 114, 182, 0.15)', // Pink
         'rgba(251, 146, 60, 0.15)',  // Orange
-        'rgba(74, 222, 128, 0.15)',  // Green
-        'rgba(250, 204, 21, 0.15)',  // Yellow
+        'rgba(74, 222, 128, 0.15)',  // Emerald Green
+        'rgba(250, 204, 21, 0.15)',  // Yellow / Gold
         'rgba(99, 102, 241, 0.15)',  // Indigo
-        'rgba(239, 68, 68, 0.15)',   // Red
+        'rgba(239, 68, 68, 0.15)',   // Crimson Red
+        'rgba(20, 184, 166, 0.15)',  // Teal
+        'rgba(236, 72, 153, 0.15)',  // Rose
+        'rgba(139, 92, 246, 0.15)',  // Violet
+        'rgba(132, 204, 22, 0.15)',  // Lime
+        'rgba(245, 158, 11, 0.15)',  // Amber
+        'rgba(6, 182, 212, 0.15)',   // Cyan
     ];
+
+    // Default Baseline Color Mapping for Initial Standard USD Rates
+    const DEFAULT_RATE_COLORS = {
+        500: 'rgba(56, 189, 248, 0.15)',  // Sky
+        450: 'rgba(168, 85, 247, 0.15)', // Purple
+        420: 'rgba(244, 114, 182, 0.15)', // Pink
+        415: 'rgba(251, 146, 60, 0.15)',  // Orange
+        395: 'rgba(74, 222, 128, 0.15)',  // Green
+    };
+
+    function getGroupColor(usdRate, allRows) {
+        if (!usdRate || usdRate <= 0) return 'transparent';
+
+        // Build mapping for all rates currently present in the rows
+        const rateMap = { ...DEFAULT_RATE_COLORS };
+
+        // Collect unique rates not in default mapping
+        const currentRates = allRows.map(r => r.usdRate).filter(r => r && r > 0);
+        const uniqueRates = [...new Set(currentRates)].sort((a, b) => b - a);
+
+        let paletteIndex = 5; // Start after the 5 baseline colors
+
+        uniqueRates.forEach(rate => {
+            if (!rateMap[rate]) {
+                if (paletteIndex < colorPalette.length) {
+                    rateMap[rate] = colorPalette[paletteIndex];
+                    paletteIndex++;
+                } else {
+                    // Complementary HSL glassmorphism color if extended palette is exhausted
+                    const hue = Math.abs(Math.floor(rate * 137.5)) % 360;
+                    rateMap[rate] = `hsla(${hue}, 85%, 65%, 0.15)`;
+                }
+            }
+        });
+
+        return rateMap[usdRate] || 'transparent';
+    }
 
     // --- Core Logic ---
 
@@ -116,13 +187,6 @@ document.addEventListener('DOMContentLoaded', () => {
         totalPriceDisplay.textContent = 'AED ' + totalP.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    function getGroupColor(usdRate, uniqueRates) {
-        if (!usdRate) return 'transparent'; // No color for empty rate
-        const index = uniqueRates.indexOf(usdRate);
-        if (index === -1) return 'transparent';
-        return colorPalette[index % colorPalette.length];
-    }
-
     function renderTable() {
         // Sort Logic:
         // 1. Size (mm) Ascending (Smallest to Largest).
@@ -144,10 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return a.id - b.id;
         });
 
-        // Identify Unique Rates for Color Mapping (Filter out "empty" ones)
-        const validRates = rows.map(r => r.usdRate).filter(r => r && r > 0);
-        const uniqueRates = [...new Set(validRates)].sort((a, b) => b - a);
-
         tableBody.innerHTML = '';
 
         rows.forEach(row => {
@@ -155,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tr.className = 'data-row';
 
             // Apply Color Grouping
-            const color = getGroupColor(row.usdRate, uniqueRates);
+            const color = getGroupColor(row.usdRate, rows);
             tr.style.backgroundColor = color;
 
             // Inputs handling for Custom or Empty Fields
@@ -331,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const rowToRestore = deletedRowsStack.pop();
         rows.push(rowToRestore);
+        saveRowsToLocalStorage();
 
         // Re-renders and re-sorts automatically based on existing logic
         renderTable();
@@ -357,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (index > -1) {
             const deletedRow = rows[index];
             rows.splice(index, 1);
+            saveRowsToLocalStorage();
 
             // Add to Undo Stack
             deletedRowsStack.push(deletedRow);
@@ -424,6 +486,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fmtNum = (n, d) => n.toFixed(d);
                 const fmtCur = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+                // Update Row Color if USD rate was changed
+                if (field === 'usdRate') {
+                    tr.style.backgroundColor = getGroupColor(row.usdRate, rows);
+                }
+
                 // Weight Cell (Index 4)
                 tr.children[4].textContent = fmtNum(row.totalWeight, 3);
 
@@ -433,6 +500,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateTotals();
             }
         }
+
+        saveRowsToLocalStorage();
     }
 
 
@@ -450,6 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isCustom: true
         };
         rows.push(newRow);
+        saveRowsToLocalStorage();
         // Do NOT need to calculateRow since it's empty (0)
         // Render will put it at the bottom because usdRate is null
         renderTable();

@@ -204,6 +204,14 @@
         const urlParams = new URLSearchParams(window.location.search);
         const redirectTarget = urlParams.get('redirect') || 'index.html';
 
+        // Local file protocol handling (Firebase Auth requires HTTP/HTTPS)
+        if (window.location.protocol === 'file:') {
+            showError("Firebase Auth is not supported under file:// protocol. Local mode detected — proceeding automatically...");
+            setTimeout(() => {
+                window.location.href = redirectTarget;
+            }, 1200);
+        }
+
         // Check if user is already signed in and approved
         auth.onAuthStateChanged(async (user) => {
             if (user) {

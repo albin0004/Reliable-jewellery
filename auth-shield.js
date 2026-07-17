@@ -15,8 +15,8 @@ function getRootPath() {
 // 1. Cloak the body immediately to prevent screen flashing
 (function() {
     const path = window.location.pathname;
-    if (path.includes('login.html') || path.includes('access-denied.html')) {
-        return; // Skip login and access denied pages
+    if (path.includes('login.html') || path.includes('access-denied.html') || window.location.protocol === 'file:') {
+        return; // Skip login, access denied, and local file:// pages
     }
     
     const style = document.createElement('style');
@@ -30,6 +30,13 @@ window.addEventListener('DOMContentLoaded', () => {
     const path = window.location.pathname;
     if (path.includes('login.html') || path.includes('access-denied.html')) {
         return; // Skip auth verification on login/access-denied pages
+    }
+
+    // Bypass auth check when running locally via file:// protocol
+    if (window.location.protocol === 'file:') {
+        console.warn("Auth Shield: Running under file:// protocol. Bypassing auth for local file access.");
+        removeCloak();
+        return;
     }
 
     firebase.auth().onAuthStateChanged(async (user) => {
