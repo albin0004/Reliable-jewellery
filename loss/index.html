@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <!-- Firebase Config & Auth Shield -->
+    <script src="../firebase-config.js"></script>
+    <script src="../auth-shield.js"></script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loss Calculation - Real-Time Database & Analytics</title>
+    <meta name="description" content="Real-time loss calculation, client management, multi-device database sync, and reporting.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar Backdrop Overlay for Mobile -->
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                    <span>LossCalc</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="../index.html" class="nav-tab back-to-home" style="text-decoration: none; display: flex; align-items: center; gap: 0.85rem; color: #94a3b8;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    <span>Back to Home</span>
+                </a>
+                <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); margin: 0.25rem 0;"></div>
+
+                <button class="nav-tab active" data-tab="workspace">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    <span>Clients Workspace</span>
+                </button>
+
+                <button class="nav-tab" data-tab="dashboard">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    <span>Dashboard & Analytics</span>
+                </button>
+
+                <button class="nav-tab" data-tab="deletion">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    <span>Data Deletion</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="sync-status-badge" id="sync-status" title="Database connection status">
+                    <span class="status-dot online"></span>
+                    <span class="status-text">Realtime Sync Active</span>
+                    <span class="status-ping" id="sync-ping">12ms</span>
+                </div>
+                <button class="btn-sidebar-settings" id="btn-sync-settings" title="Configure Cloud DB Sync">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span>DB Sync & Storage</span>
+                </button>
+            </div>
+        </aside>
+
+        <div class="main-content">
+            <div class="main-container">
+                <header class="top-nav">
+                    <div class="top-nav-left">
+                        <button class="mobile-menu-toggle" id="mobile-menu-toggle" aria-label="Toggle Sidebar Menu">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                        </button>
+                        <h1 class="page-title" id="page-title">Clients Workspace</h1>
+                        <div class="stat-pill">
+                            <span class="stat-label">Total Clients:</span>
+                            <span id="stat-clients">0</span>
+                        </div>
+                    </div>
+
+                    <div class="top-nav-right">
+                        <div class="search-box-wrapper">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <input type="text" id="global-search" placeholder="Search client name..." autocomplete="off">
+                        </div>
+                        <button class="btn btn-primary" id="btn-add-client">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            New Client
+                        </button>
+                    </div>
+                </header>
+
+                <!-- TAB 1: WORKSPACE VIEW -->
+                <main class="tab-content active" id="tab-workspace">
+                    <div class="workspace" id="workspace">
+                        <!-- Client Cards will be injected here -->
+                    </div>
+                </main>
+
+                <!-- TAB 2: DASHBOARD VIEW -->
+                <main class="tab-content" id="tab-dashboard">
+                    <div class="dashboard-container">
+                        <!-- Date & Client Filter Bar -->
+                        <div class="glass-panel filter-panel">
+                            <div class="filter-group">
+                                <label for="dash-from-date">From Date:</label>
+                                <input type="date" id="dash-from-date" class="date-input">
+                            </div>
+                            <div class="filter-group">
+                                <label for="dash-to-date">To Date:</label>
+                                <input type="date" id="dash-to-date" class="date-input">
+                            </div>
+                            <div class="filter-group">
+                                <label for="dash-client-select">Client:</label>
+                                <div class="select-wrapper">
+                                    <select id="dash-client-select" class="custom-select">
+                                        <option value="ALL">All Clients</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="filter-actions-group" style="display:flex; gap:8px; align-items:flex-end;">
+                                <button class="btn btn-secondary" id="btn-reset-filters">Reset Filters</button>
+                                <button class="btn btn-primary" id="btn-dash-download-report" title="Download High-Quality Analytics Image Report">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    Download Report
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Metrics Grid -->
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-icon col2">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                                </div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Total Col 2</span>
+                                    <h2 class="metric-value text-blue" id="dash-total-col2">0.00</h2>
+                                </div>
+                            </div>
+
+                            <div class="metric-card">
+                                <div class="metric-icon col3">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                                </div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Total Col 3</span>
+                                    <h2 class="metric-value text-green" id="dash-total-col3">0.00</h2>
+                                </div>
+                            </div>
+
+                            <div class="metric-card">
+                                <div class="metric-icon col4">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                                </div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Total Col 4</span>
+                                    <h2 class="metric-value text-red" id="dash-total-col4">0.00</h2>
+                                </div>
+                            </div>
+
+                            <div class="metric-card highlighted recd">
+                                <div class="metric-icon recd">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                </div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Total RECDs</span>
+                                    <h2 class="metric-value text-green" id="dash-total-recd">0.00</h2>
+                                </div>
+                            </div>
+
+                            <div class="metric-card highlighted loss">
+                                <div class="metric-icon loss">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                                </div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Total LOSS</span>
+                                    <h2 class="metric-value text-gold" id="dash-total-loss">0.00</h2>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-section">
+                            <div class="section-header">
+                                <h3>Full Master Data Sheets</h3>
+                                <span class="badge" id="master-sheet-count">0 items</span>
+                            </div>
+                            <div class="glass-panel master-table-container">
+                                <table class="master-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 12%;">Date</th>
+                                            <th style="width: 16%;">Client Name</th>
+                                            <th style="width: 12%;">Item Photo</th>
+                                            <th style="width: 28%;">Full Item Name</th>
+                                            <th class="num-col text-blue" style="width: 8%;">Col 2</th>
+                                            <th class="num-col text-green" style="width: 8%;">Col 3</th>
+                                            <th class="num-col text-red" style="width: 8%;">Col 4</th>
+                                            <th class="num-col text-green" style="width: 8%;">RECD</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="master-table-body">
+                                        <!-- Full data rows rendered here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+
+                <!-- TAB: DATA DELETION INTERFACE -->
+                <main class="tab-content" id="tab-deletion">
+                    <div class="del-page-wrap">
+
+                        <!-- Page Header -->
+                        <div class="del-page-header">
+                            <h1 class="del-page-title">Data Deletion Interface</h1>
+                            <div class="del-header-right">
+                                <button class="del-help-btn" title="Help">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                                    Help
+                                </button>
+                                <div class="del-admin-badge">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                    Logged in as Admin
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filter Toolbar -->
+                        <div class="del-toolbar-card">
+                            <div class="del-toolbar-row">
+                                <div class="del-field-group">
+                                    <label class="del-field-label" for="del-from-date">From Date</label>
+                                    <div class="del-date-wrap">
+                                        <input type="date" id="del-from-date" class="del-date-input">
+                                        <svg class="del-cal-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                    </div>
+                                </div>
+                                <div class="del-field-group">
+                                    <label class="del-field-label" for="del-to-date">To Date</label>
+                                    <div class="del-date-wrap">
+                                        <input type="date" id="del-to-date" class="del-date-input">
+                                        <svg class="del-cal-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                    </div>
+                                </div>
+                                <div class="del-field-group">
+                                    <label class="del-field-label" for="del-client-scope">Client Scope</label>
+                                    <select id="del-client-scope" class="del-select-input">
+                                        <option value="ALL">All Clients</option>
+                                        <option value="SPECIFIC">Specific Client</option>
+                                    </select>
+                                </div>
+                                <div class="del-field-group" id="del-specific-client-wrapper">
+                                    <label class="del-field-label" for="del-specific-client">Select Client</label>
+                                    <select id="del-specific-client" class="del-select-input">
+                                        <option value="">Choose Client...</option>
+                                    </select>
+                                </div>
+                                <div class="del-field-group del-apply-group">
+                                    <label class="del-field-label del-field-label-hidden">&nbsp;</label>
+                                    <button class="del-apply-btn" id="btn-del-apply">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                                        Apply
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preview Table Card -->
+                        <div class="del-preview-card">
+                            <div class="del-preview-header">
+                                <h2 class="del-preview-title">Targeted Records & Images Preview</h2>
+                                <span class="del-rows-counter" id="del-rows-counter">Rows: 0 of 0</span>
+                            </div>
+                            <div class="del-table-wrap">
+                                <table class="del-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="del-th-check">
+                                                <input type="checkbox" id="del-chk-all" class="del-chk" checked>
+                                                <span>Select</span>
+                                            </th>
+                                            <th>Record ID</th>
+                                            <th>Client</th>
+                                            <th>Date Created</th>
+                                            <th>Record Type</th>
+                                            <th>Details</th>
+                                            <th class="del-th-image">Image</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="del-table-body">
+                                        <tr>
+                                            <td colspan="7" class="del-empty-msg">
+                                                Select a date range and client scope, then click <strong>Apply</strong> to preview targeted records.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="del-table-footer">
+                                <span id="del-selected-count">0 records selected</span>
+                            </div>
+                        </div>
+
+                        <!-- Permanent Delete Button -->
+                        <div class="del-action-bar">
+                            <button class="del-delete-btn" id="btn-del-execute" disabled>
+                                Permanently Delete Data &amp; Images
+                            </button>
+                        </div>
+
+                    </div>
+                </main>
+
+
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: ADD CLIENT MODAL -->
+    <div class="modal-overlay" id="add-client-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Client</h3>
+                <button class="close-btn" id="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group autocomplete-container">
+                    <label for="client-name">Client Name</label>
+                    <input type="text" id="client-name" placeholder="Type client name (e.g. Aramco)..." autocomplete="off">
+                    <div class="suggestions-dropdown" id="client-suggestions"></div>
+                </div>
+                <div class="client-match-status" id="client-match-status"></div>
+                <p class="hint-text">
+                    💡 <em>Matching is case-insensitive. Typing "aramco", "Aramco", or "ARAMCO" will match the same client. Select from suggestions or type a custom new name.</em>
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-client">Cancel</button>
+                <button class="btn btn-primary" id="btn-save-client">Create Client</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: DATABASE & REAL-TIME SYNC SETTINGS MODAL -->
+    <div class="modal-overlay" id="sync-settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Database & Real-time Sync</h3>
+                <button class="close-btn" id="close-sync-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Database Status</label>
+                    <div class="sync-info-box">
+                        <p>✅ Local DB (IndexedDB): Active (Fast Realtime Engine)</p>
+                        <p>⚡ Multi-Tab / Multi-Window Sync: Connected (Real-time)</p>
+                        <p id="cloud-sync-status-text">☁️ Cloud Realtime DB: Offline / Local mode (Enter Firebase config below to sync across all external devices)</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Image Store Storage Usage</label>
+                    <div class="sync-info-box" id="storage-telemetry-box">
+                        <p>📷 Attached Photos: <strong id="telemetry-img-count">0</strong></p>
+                        <p>💾 Estimated Image Storage: <strong id="telemetry-img-size">0 KB</strong></p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                        <label for="firebase-config" style="margin-bottom:0;">Firebase / Cloud DB Config (JSON)</label>
+                        <button type="button" class="btn btn-secondary" id="btn-toggle-config-visibility" style="padding: 4px 10px; font-size: 0.75rem; height: auto;">Show Config</button>
+                    </div>
+                    <div id="firebase-config-obscured-notice" style="padding: 1.25rem; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 6px; text-align: center; color: var(--text-secondary); font-size: 0.88rem; font-weight: 600;">
+                        🔒 Configuration details are hidden to protect sensitive data.
+                    </div>
+                    <textarea id="firebase-config" rows="5" style="display: none;" placeholder='{
+  "apiKey": "YOUR_API_KEY",
+  "authDomain": "your-app.firebaseapp.com",
+  "databaseURL": "https://your-app-default-rtdb.firebaseio.com",
+  "projectId": "your-app",
+  "storageBucket": "your-app.appspot.com",
+  "messagingSenderId": "1234567",
+  "appId": "1:123456:web:abcd"
+}'></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-sync">Close</button>
+                <button class="btn btn-primary" id="btn-save-sync">Save & Sync</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: ITEM PHOTO LIGHTBOX MODAL -->
+    <div class="modal-overlay" id="image-lightbox-modal">
+        <div class="modal-content lightbox-content">
+            <div class="modal-header">
+                <h3 id="lightbox-title">Item Photo Preview</h3>
+                <button class="close-btn" id="close-lightbox">&times;</button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="lightbox-img" src="" alt="Enlarged Item Photo" class="lightbox-image">
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: INTERACTIVE HIGH-QUALITY IMAGE CROPPER MODAL -->
+    <div class="modal-overlay" id="image-crop-modal">
+        <div class="modal-content crop-modal-content">
+            <div class="modal-header">
+                <h3>Crop Item Photo (High Quality)</h3>
+                <button class="close-btn" id="close-crop-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="crop-image-wrapper">
+                    <img id="crop-target-img" src="" alt="Crop Target">
+                </div>
+                <div class="crop-toolbar">
+                    <button class="btn btn-secondary" id="btn-rotate-left" title="Rotate Left 90°">↺ Rotate Left</button>
+                    <button class="btn btn-secondary" id="btn-rotate-right" title="Rotate Right 90°">↻ Rotate Right</button>
+                    <button class="btn btn-secondary" id="btn-reset-crop" title="Reset Crop">Reset</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-crop">Cancel</button>
+                <button class="btn btn-primary" id="btn-apply-crop">Crop & Save (High Quality)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input for item photo upload -->
+    <input type="file" id="item-photo-input" accept="image/*" style="display: none;">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

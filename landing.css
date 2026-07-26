@@ -253,7 +253,7 @@ h1 {
 /* On desktop, keep them in one row */
 @media (min-width: 1024px) {
     .app-grid {
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
     }
 }
 
@@ -318,6 +318,14 @@ h1 {
 
 .card:nth-child(6) {
     animation-delay: 0.9s;
+}
+
+.card:nth-child(7) {
+    animation-delay: 1.0s;
+}
+
+.card:nth-child(8) {
+    animation-delay: 1.1s;
 }
 
 .card::before {

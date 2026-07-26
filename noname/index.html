@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <!-- Firebase Config & Auth Shield -->
+  <script src="../firebase-config.js"></script>
+  <script src="../auth-shield.js"></script>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="NARRATION - Stock Reconciliation Ledger">
+  <title>NARRATION | Stock Reconciliation</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- html2canvas for Image Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    
+    <!-- Header with Download Button -->
+    <header class="app-header">
+      <div class="brand">
+        <a href="../index.html" class="back-btn" title="Back to Homepage" style="margin-right: 1.5rem; display: inline-flex; text-decoration: none;">
+          <i data-lucide="arrow-left"></i>
+          <span>Back</span>
+        </a>
+        <div class="brand-icon">
+          <i data-lucide="clipboard-list"></i>
+        </div>
+        <div class="brand-text">
+          <h1>NARRATION</h1>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <button id="headerDownloadBtn" class="btn btn-primary header-download-btn" title="Export table view as PNG image">
+          <i data-lucide="download"></i>
+          <span>Download</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area (Captured for Image Export) -->
+    <main class="main-content" id="mainCaptureArea">
+      
+      <div class="table-card">
+        <div class="table-header-row">
+          <div class="table-info" data-html2canvas-ignore="true">
+            <i data-lucide="database"></i>
+            <h2>Stock Reconciliation</h2>
+          </div>
+          
+          <!-- Document Level Metadata (Date and Reference) -->
+          <div class="meta-container">
+            <div class="ref-container">
+              <span class="ref-label">DATE:</span>
+              <input type="date" id="docDateInput" class="ref-input">
+            </div>
+            <div class="ref-container">
+              <span class="ref-label">REF:</span>
+              <input type="text" id="referenceInput" placeholder="Enter Ref No..." class="ref-input">
+            </div>
+          </div>
+
+          <div class="table-actions" data-html2canvas-ignore="true">
+            <button id="addRowBtn" class="btn btn-secondary btn-sm">
+              <i data-lucide="plus"></i> Add Row
+            </button>
+            <button id="resetTableBtn" class="btn btn-outline btn-sm">
+              <i data-lucide="rotate-ccw"></i> Reset
+            </button>
+          </div>
+        </div>
+
+        <!-- Ledger Spreadsheet Grid -->
+        <div class="table-responsive">
+          <table class="ledger-table" id="reconciliationTable">
+            <thead>
+              <tr>
+                <th class="col-num-th">No.</th>
+                <th class="col-narration-th">NARRATION</th>
+                <th class="col-val-th">1</th>
+                <th class="col-val-th">2</th>
+                <th class="col-val-th">3</th>
+                <th class="col-res-th">4</th>
+                <th class="col-action-th no-capture-cell" data-html2canvas-ignore="true">Action</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <!-- Dynamically populated rows -->
+            </tbody>
+            <tfoot>
+              <!-- Bottom Add Extra Row Action -->
+              <tr class="add-row-tr" data-html2canvas-ignore="true">
+                <td colspan="7" style="padding: 0.5rem 0.75rem; background-color: var(--bg-input);">
+                  <button id="addBottomRowBtn" class="btn btn-secondary btn-sm" style="width: 100%; justify-content: center;">
+                    <i data-lucide="plus-circle"></i> Add Extra Row
+                  </button>
+                </td>
+              </tr>
+
+              <!-- Summary Rows aligned under Column 4 -->
+              <tr class="summary-tr">
+                <td colspan="5" class="summary-label-cell">ON HAND STOCK</td>
+                <td class="summary-value-cell" id="onHandStockVal"></td>
+                <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
+              </tr>
+              <tr class="summary-tr">
+                <td colspan="5" class="summary-label-cell">PHYSICAL STOCK</td>
+                <td class="summary-value-cell input-cell">
+                  <input type="number" id="physicalStockInput" step="any" placeholder="" class="summary-table-input">
+                </td>
+                <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
+              </tr>
+              <tr class="summary-tr">
+                <td colspan="5" class="summary-label-cell">DIFFERENCE</td>
+                <td class="summary-value-cell" id="differenceVal"></td>
+                <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden">
+      <i data-lucide="check-circle" id="toastIcon"></i>
+      <span id="toastMessage">Action completed successfully</span>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
