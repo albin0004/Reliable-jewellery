@@ -21,160 +21,141 @@
     <meta name="theme-color" content="#D4AF37">
     <meta name="description"
         content="Reliable Jewellery Professional Suite: Accurate quotation calculations, diamond weight conversion, and rate convention tools for jewellery professionals.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
 
-    <!-- Ambient / Dynamic Background -->
+    <!-- Ambient Background -->
     <div class="bg-container">
-        <!-- Soft Glows -->
         <div class="bg-orb orb-1"></div>
         <div class="bg-orb orb-2"></div>
-
-        <!-- Moving Shapes -->
-        <div class="floating-shape shape-diamond"></div>
-        <div class="floating-shape shape-circle"></div>
-        <div class="floating-shape shape-gem"></div>
-
-        <!-- Sparkles -->
-        <div class="sparkle s1"></div>
-        <div class="sparkle s2"></div>
-        <div class="sparkle s3"></div>
-        <div class="sparkle s4"></div>
+        <div class="bg-orb orb-3"></div>
     </div>
 
-    <header>
-        <h1>Reliable Jewellery</h1>
-        <p class="subtitle">Premium Suite of Professional Analytical Tools</p>
-    </header>
+    <!-- Full Page Wrapper -->
+    <div class="page-wrapper">
 
-    <main class="app-grid">
-        <!-- Card 1: Quotation App -->
-        <a href="quotation/index.html" class="card">
-            <div class="icon-wrapper">
-                <!-- Gem/Calculator Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6 3h12l4 6-10 13L2 9z" />
-                    <path d="M11 3 8 9l4 13 4-13-3-6" />
-                </svg>
+        <header class="site-header">
+            <div class="header-brand">
+                <div class="brand-gem">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 3h12l4 6-10 13L2 9z"/>
+                        <path d="M11 3 8 9l4 13 4-13-3-6"/>
+                    </svg>
+                </div>
+                <span class="brand-name">Reliable Jewellery</span>
             </div>
-            <h2>Quotation Rate App</h2>
-            <p>Calculate precise jewellery rates, purity costs, and making charges with our advanced quotation engine.
-            </p>
-            <span class="launch-btn">Launch App</span>
-        </a>
-
-        <!-- Card 2: Price List -->
-        <a href="price-list/index.html" class="card">
-            <div class="icon-wrapper">
-                <!-- Price List Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            <p class="header-tagline">Professional Suite</p>
+            <button id="logout-btn" class="logout-btn" title="Sign Out">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
                 </svg>
-            </div>
-            <h2>Price List</h2>
-            <p>Access the complete real-time jewellery price list with image galleries and dynamic rate calculations.</p>
-            <span class="launch-btn">Launch App</span>
-        </a>
+            </button>
+        </header>
 
-        <!-- Card 3: Catalog -->
-        <a href="catalog/index.html" class="card">
-            <div class="icon-wrapper">
-                <!-- Tag/Price Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                    <line x1="7" y1="7" x2="7.01" y2="7" />
-                </svg>
-            </div>
-            <h2>Catalog</h2>
-            <p>Real-time catalog management, material tracking, and price calculation for professional inventory.</p>
-            <span class="launch-btn">Launch App</span>
-        </a>
+        <main class="app-grid">
 
-        <!-- Card 4: Multi-Purity Gold Converter -->
-        <a href="gold-converter/index.html" class="card">
-            <div class="icon-wrapper">
-                <!-- Scales/Exchange Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 3v18" />
-                    <path d="M5 10h14" />
-                    <path d="M5 21h14" />
-                    <path d="M17 10v4a2 2 0 1 1-4 0v-4" />
-                    <path d="M7 10v4a2 2 0 1 0 4 0v-4" />
-                </svg>
-            </div>
-            <h2>Gold Purity Converter</h2>
-            <p>Real-time bi-directional conversion between Manual Ref, Pure Gold, and 18K values.</p>
-            <span class="launch-btn">Launch App</span>
-        </a>
+            <!-- Card 1: Quotation -->
+            <a href="quotation/index.html" class="card" id="card-quotation">
+                <div class="card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 3h12l4 6-10 13L2 9z"/>
+                        <path d="M11 3 8 9l4 13 4-13-3-6"/>
+                    </svg>
+                </div>
+                <span class="card-name">Quotation Rate</span>
+            </a>
 
-        <!-- Card 5: Rate Conversion Tool -->
-        <a href="tools/index.html" class="card">
-            <div class="icon-wrapper">
-                <!-- Analytics/Scales Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 3v18h18" />
-                    <path d="m19 9-5 5-4-4-3 3" />
-                </svg>
-            </div>
-            <h2>Rate Conversion Tool</h2>
-            <p>Standardize your rate conventions and perform in-depth market analysis with professional charting.</p>
-            <span class="launch-btn">Launch App</span>
-        </a>
+            <!-- Card 2: Price List -->
+            <a href="price-list/index.html" class="card" id="card-pricelist">
+                <div class="card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        <line x1="9" y1="12" x2="15" y2="12"/>
+                        <line x1="9" y1="16" x2="12" y2="16"/>
+                    </svg>
+                </div>
+                <span class="card-name">Price List</span>
+            </a>
 
-        <!-- Card 6: Diamond Weight and Rate -->
-        <a href="diamond/index.html" class="card">
-            <div class="icon-wrapper">
-                <!-- Diamond Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-                    <path
-                        d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z" />
-                </svg>
-            </div>
-            <h2>Diamond Weight & Rate</h2>
-            <p>Instant diamond weight conversion and rate estimation. Essential for quick valuations.</p>
-            <span class="launch-btn">Launch App</span>
-        </a>
+            <!-- Card 3: Catalog -->
+            <a href="catalog/index.html" class="card" id="card-catalog">
+                <div class="card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                        <line x1="7" y1="7" x2="7.01" y2="7"/>
+                    </svg>
+                </div>
+                <span class="card-name">Catalog</span>
+            </a>
 
-        <!-- Card 7: Loss Calculation -->
-        <a href="loss/index.html" class="card">
-            <div class="icon-wrapper">
-                <!-- Loss/Trending Down Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
-                    <polyline points="17 18 23 18 23 12"></polyline>
-                </svg>
-            </div>
-            <h2>Loss Calc Tool</h2>
-            <p>Track client material losses, manage real-time databases, and analyze production waste.</p>
-            <span class="launch-btn">Launch App</span>
-        </a>
+            <!-- Card 4: Gold Purity Converter -->
+            <a href="gold-converter/index.html" class="card" id="card-gold">
+                <div class="card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3v18"/>
+                        <path d="M5 10h14"/>
+                        <path d="M5 21h14"/>
+                        <path d="M17 10v4a2 2 0 1 1-4 0v-4"/>
+                        <path d="M7 10v4a2 2 0 1 0 4 0v-4"/>
+                    </svg>
+                </div>
+                <span class="card-name">Gold Purity Converter</span>
+            </a>
 
-        <!-- Card 8: Narration -->
-        <a href="noname/index.html" class="card">
-            <div class="icon-wrapper">
-                <!-- Clipboard List Icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                </svg>
-            </div>
-            <h2>Narration</h2>
-            <p>Maintain narration-based stock ledgers, log physical inventory differences, and generate reports.</p>
-            <span class="launch-btn">Launch App</span>
-        </a>
-    </main>
+            <!-- Card 5: Rate Conversion Tool -->
+            <a href="tools/index.html" class="card" id="card-tools">
+                <div class="card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 3v18h18"/>
+                        <path d="m19 9-5 5-4-4-3 3"/>
+                    </svg>
+                </div>
+                <span class="card-name">Rate Conversion</span>
+            </a>
 
-    <footer>
-        &copy; 2026 Reliable Jewellery. Crafted for Excellence. <!-- v1.1.0 -->
-        <br>
-        <button id="logout-btn" style="background:none; border:none; color:var(--gold-primary); cursor:pointer; font-family:inherit; margin-top:8px; text-decoration:underline; font-size:0.9rem;">Sign Out</button>
-    </footer>
+            <!-- Card 6: Diamond Weight & Rate -->
+            <a href="diamond/index.html" class="card" id="card-diamond">
+                <div class="card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"/>
+                    </svg>
+                </div>
+                <span class="card-name">Diamond Weight &amp; Rate</span>
+            </a>
+
+            <!-- Card 7: Loss Calc -->
+            <a href="loss/index.html" class="card" id="card-loss">
+                <div class="card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
+                        <polyline points="17 18 23 18 23 12"/>
+                    </svg>
+                </div>
+                <span class="card-name">Loss Calc</span>
+            </a>
+
+            <!-- Card 8: Narration -->
+            <a href="noname/index.html" class="card" id="card-narration">
+                <div class="card-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                        <line x1="9" y1="12" x2="15" y2="12"/>
+                        <line x1="9" y1="16" x2="12" y2="16"/>
+                    </svg>
+                </div>
+                <span class="card-name">Narration</span>
+            </a>
+
+        </main>
+
+    </div>
 
     <script>
         document.getElementById('logout-btn')?.addEventListener('click', () => {
@@ -187,33 +168,21 @@
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
                     .then(registration => {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-
-                        // Force check for sw.js updates
                         registration.update();
-
-                        // Check for updates when app comes back to foreground
                         document.addEventListener('visibilitychange', () => {
-                            if (document.visibilityState === 'visible') {
-                                registration.update();
-                            }
+                            if (document.visibilityState === 'visible') registration.update();
                         });
                     })
-                    .catch(err => {
-                        console.log('ServiceWorker registration failed: ', err);
-                    });
+                    .catch(err => console.log('ServiceWorker registration failed: ', err));
 
-                // Force a page reload when the new service worker takes over
                 let refreshing = false;
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (!refreshing) {
-                        refreshing = true;
-                        window.location.reload();
-                    }
+                    if (!refreshing) { refreshing = true; window.location.reload(); }
                 });
             });
         }
     </script>
+
 </body>
 
 </html>
