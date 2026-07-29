@@ -1,14 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  <!-- Firebase Config & Auth Shield -->
-  <script src="../firebase-config.js"></script>
-  <script src="../auth-shield.js"></script>
-
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="NARRATION - Stock Reconciliation & Management Ledger">
@@ -25,8 +17,15 @@
   <!-- html2canvas for Image Export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-  <!-- Firebase App & Realtime Database SDKs (Compat) -->
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+  <!-- Shared Firebase Config & Auth Shield Middleware -->
+  <script src="../firebase-config.js"></script>
+  <script src="../auth-shield.js"></script>
 
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -36,9 +35,9 @@
     <!-- Top Header -->
     <header class="app-header">
       <div class="brand">
-        <a href="../index.html" class="back-btn" title="Back to Homepage" style="margin-right: 1.5rem; display: inline-flex; text-decoration: none;">
+        <a href="../index.html" class="btn btn-outline btn-sm" title="Back to Reliable Suite" style="text-decoration: none; margin-right: 0.25rem;">
           <i data-lucide="arrow-left"></i>
-          <span>Back</span>
+          <span>Suite</span>
         </a>
         <div class="brand-icon">
           <i data-lucide="gem"></i>

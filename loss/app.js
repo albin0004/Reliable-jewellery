@@ -2,15 +2,15 @@
 // LOSS CALCULATION — REALTIME DATABASE & APP LOGIC
 // ═══════════════════════════════════════════════════
 
-// Global Firebase Realtime Database Configuration
-const DEFAULT_FIREBASE_CONFIG = {
-    apiKey: "AIzaSyA7d3DYJSVRBgr6ZEWwOvARrpCQjVH15fg",
-    authDomain: "losscalc-app.firebaseapp.com",
-    databaseURL: "https://losscalc-app-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "losscalc-app",
-    storageBucket: "losscalc-app.firebasestorage.app",
-    messagingSenderId: "1066986355290",
-    appId: "1:1066986355290:web:4fe06ef52c77d59fccb663"
+// Global Firebase Realtime Database Configuration (Integrated with Reliable Jewellery central Firebase)
+const DEFAULT_FIREBASE_CONFIG = (typeof firebaseConfig !== 'undefined' && firebaseConfig) ? firebaseConfig : {
+    apiKey: "AIzaSyDSWqrXU8zj8cgf5Hqz-lDQ1MgVFqfVKTk",
+    authDomain: "jewellery2026reliable.firebaseapp.com",
+    databaseURL: "https://jewellery2026reliable-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "jewellery2026reliable",
+    storageBucket: "jewellery2026reliable.firebasestorage.app",
+    messagingSenderId: "942211910337",
+    appId: "1:942211910337:web:66b9626444f200dfd4a240"
 };
 
 // Global State
@@ -49,9 +49,6 @@ function requestSecureDeletion(warningMessage, onConfirmCallback) {
     const secModal = document.getElementById('security-delete-modal');
     const input = document.getElementById('sec-del-confirm-input');
     const btn = document.getElementById('btn-confirm-sec-del');
-    const reqWord = document.getElementById('sec-del-required-word');
-
-    if (reqWord) reqWord.textContent = '7722';
 
     if (secModal) {
         secModal.classList.add('active');
@@ -250,10 +247,9 @@ function loadState() {
             } else if (Array.isArray(parsed)) {
                 state.clients = parsed;
             }
-            if (parsed.firebaseConfig) {
+            if (parsed.firebaseConfig && !parsed.firebaseConfig.authDomain?.includes('losscalc-app')) {
                 state.firebaseConfig = parsed.firebaseConfig;
-            }
-            if (!state.firebaseConfig) {
+            } else {
                 state.firebaseConfig = DEFAULT_FIREBASE_CONFIG;
             }
             if (firebaseConfigInput) {
@@ -500,13 +496,15 @@ function saveState(notifyBroadcast = true, syncCloud = true) {
 
 // Cloud Firebase Granular Real-time Synchronization & Deletion Engine
 function initFirebaseIfConfigured() {
-    if (state.firebaseConfig && window.firebase) {
+    if (window.firebase) {
         try {
-            if (!firebaseDb) {
-                const dbUrl = state.firebaseConfig?.databaseURL || "https://losscalc-app-default-rtdb.asia-southeast1.firebasedatabase.app";
-                let app = firebase.apps.length ? firebase.app() : firebase.initializeApp(state.firebaseConfig);
-                firebaseApp = app;
-                firebaseDb = firebase.database(app, dbUrl);
+            if (!firebaseApp) {
+                if (firebase.apps && firebase.apps.length > 0) {
+                    firebaseApp = firebase.app();
+                } else {
+                    firebaseApp = firebase.initializeApp(state.firebaseConfig || DEFAULT_FIREBASE_CONFIG);
+                }
+                firebaseDb = firebase.database();
             }
 
             const clientsRef = firebaseDb.ref('loss_calc/clients');
@@ -1755,9 +1753,6 @@ function renderWorkspace() {
         card.innerHTML = `
             <div class="client-header">
                 <div class="client-header-left">
-                    <div class="client-select-wrapper" data-html2canvas-ignore>
-                        <input type="checkbox" class="client-select-checkbox" data-client-id="${client.id}" ${isChecked ? 'checked' : ''} title="Select entry for deletion">
-                    </div>
                     <h3 class="client-title">${client.name}</h3>
                     <div class="client-date-pill" data-html2canvas-ignore>
                         <span class="date-label">Date:</span>
@@ -1828,18 +1823,7 @@ function renderWorkspace() {
 
         workspace.appendChild(card);
 
-        // Checkbox Selection Event
-        const cardCheckbox = card.querySelector('.client-select-checkbox');
-        if (cardCheckbox) {
-            cardCheckbox.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    state.selectedClientIds.add(client.id);
-                } else {
-                    state.selectedClientIds.delete(client.id);
-                }
-                updateBulkDeleteToolbarUI();
-            });
-        }
+
 
         // Attach Card Events
         card.querySelector('.btn-delete-client').addEventListener('click', () => deleteClient(client.id));

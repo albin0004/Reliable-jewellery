@@ -846,31 +846,3 @@ body.is-exporting-image .cell-textarea {
   background: linear-gradient(135deg, #dc2626, #b91c1c);
   transform: translateY(-1px);
 }
-
-/* Suite Navigation Back Button */
-.back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.85rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-weight: 600;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
-  text-decoration: none;
-}
-
-.back-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  transform: translateX(-2px);
-}
-
-.back-btn i, .back-btn svg {
-  width: 18px;
-  height: 18px;
-}
-

@@ -107,6 +107,31 @@ body {
 .sidebar-header {
     margin-bottom: 2rem;
     padding: 0 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.btn-back-suite {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-sm);
+    color: #e2e8f0;
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: 700;
+    transition: all 0.2s ease;
+}
+
+.btn-back-suite:hover {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
 }
 
 .sidebar-header .logo {

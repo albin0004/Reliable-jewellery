@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reliable-jewellery-v5';
+const CACHE_NAME = 'reliable-jewellery-v6';
 const ASSETS = [
     './',
     './index.html',
@@ -15,7 +15,13 @@ const ASSETS = [
     './quotation/script.js',
     './diamond/index.html',
     './diamond/style.css',
-    './diamond/script.js'
+    './diamond/script.js',
+    './loss/index.html',
+    './loss/style.css',
+    './loss/app.js',
+    './NARRATION/index.html',
+    './NARRATION/styles.css',
+    './NARRATION/app.js'
 ];
 
 self.addEventListener('install', (event) => {

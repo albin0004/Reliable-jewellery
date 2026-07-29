@@ -160,79 +160,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  const REST_DB_ENDPOINT = "https://narration-52020-default-rtdb.asia-southeast1.firebasedatabase.app/narration_isolated_projects/narration_stock_ledger_v1.json";
+  function initFirebaseSync() {
+    if (typeof firebase === 'undefined') {
+      console.warn('Firebase SDK unavailable. Running in local storage mode.');
+      updateSyncStatus('offline', 'Local Storage Mode');
+      return;
+    }
 
-  async function initFirebaseSync() {
-    // 1. Instant REST sync check to immediately verify connection and clear offline warnings
     try {
-      const response = await fetch(REST_DB_ENDPOINT);
-      if (response.ok) {
-        updateSyncStatus('online', 'Live Sync Active');
-        const data = await response.json();
-        if (data && data.deviceId !== syncDeviceId) {
+      if (!firebase.apps.length) {
+        const configToUse = (typeof window.firebaseConfig !== 'undefined') ? window.firebaseConfig : firebaseConfig;
+        firebase.initializeApp(configToUse);
+      }
+
+      // Dedicated isolated path for this Narration project
+      const db = firebase.database();
+      firebaseDbRef = db.ref('narration_isolated_projects/narration_stock_ledger_v1');
+
+      // Connection status listener
+      const connectedRef = db.ref('.info/connected');
+      connectedRef.on('value', (snap) => {
+        if (snap.val() === true) {
+          updateSyncStatus('online', 'Live Sync Active');
+        } else {
+          updateSyncStatus('connecting', 'Connecting...');
+        }
+      });
+
+      // Real-time synchronization listener across devices
+      firebaseDbRef.on('value', (snapshot) => {
+        if (isLocalUpdate) return;
+
+        const data = snapshot.val();
+        if (!data) {
+          renderFromSyncData(null);
+          return;
+        }
+
+        if (data.deviceId !== syncDeviceId) {
           renderFromSyncData(data);
         }
-      }
+      }, (err) => {
+        console.error('Firebase sync error:', err);
+        updateSyncStatus('offline', 'Offline Mode');
+      });
+
     } catch (e) {
-      console.warn('Initial REST sync fallback check:', e);
+      console.error('Failed to initialize Firebase:', e);
+      updateSyncStatus('offline', 'Local Storage Mode');
     }
-
-    // 2. Firebase SDK Real-Time Connection
-    if (typeof firebase !== 'undefined') {
-      try {
-        let narrationApp = firebase.apps.find(app => app.name === 'narrationApp');
-        if (!narrationApp) {
-          narrationApp = firebase.initializeApp(firebaseConfig, 'narrationApp');
-        }
-
-        const db = firebase.database(narrationApp);
-        firebaseDbRef = db.ref('narration_isolated_projects/narration_stock_ledger_v1');
-
-        const connectedRef = db.ref('.info/connected');
-        connectedRef.on('value', (snap) => {
-          if (snap.val() === true) {
-            updateSyncStatus('online', 'Live Sync Active');
-          }
-        });
-
-        firebaseDbRef.on('value', (snapshot) => {
-          updateSyncStatus('online', 'Live Sync Active');
-          if (isLocalUpdate) return;
-
-          const data = snapshot.val();
-          if (!data) {
-            renderFromSyncData(null);
-            return;
-          }
-
-          if (data.deviceId !== syncDeviceId) {
-            renderFromSyncData(data);
-          }
-        }, (err) => {
-          console.warn('Firebase RTDB SDK notice, relying on REST live sync:', err);
-          updateSyncStatus('online', 'Live Sync Active');
-        });
-
-      } catch (e) {
-        console.warn('Firebase SDK init notice:', e);
-        updateSyncStatus('online', 'Live Sync Active');
-      }
-    }
-
-    // 3. Background periodic REST sync polling (every 4s) to ensure real-time multi-device sync
-    setInterval(async () => {
-      if (isLocalUpdate) return;
-      try {
-        const res = await fetch(REST_DB_ENDPOINT);
-        if (res.ok) {
-          updateSyncStatus('online', 'Live Sync Active');
-          const data = await res.json();
-          if (data && data.deviceId !== syncDeviceId) {
-            renderFromSyncData(data);
-          }
-        }
-      } catch (e) {}
-    }, 4000);
   }
 
   // Push updated state to Firebase & Local Storage
@@ -253,33 +229,20 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem(STORAGE_KEYS.REFERENCE_NO, referenceInput.value);
     localStorage.setItem(STORAGE_KEYS.DOC_DATE, docDateInput.value);
 
-    clearTimeout(syncDebounceTimer);
-    syncDebounceTimer = setTimeout(async () => {
-      isLocalUpdate = true;
-      
-      // 1. Guaranteed Sync via REST Endpoint
-      try {
-        await fetch(REST_DB_ENDPOINT, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        updateSyncStatus('online', 'Live Sync Active');
-      } catch (err) {
-        console.warn('REST save error:', err);
-      }
-
-      // 2. Dual Sync via Firebase SDK
-      if (firebaseDbRef) {
-        firebaseDbRef.set(payload).catch(err => {
-          console.warn('SDK set notice:', err);
-        }).finally(() => {
+    // Sync to Firebase if connected
+    if (firebaseDbRef) {
+      clearTimeout(syncDebounceTimer);
+      syncDebounceTimer = setTimeout(() => {
+        isLocalUpdate = true;
+        firebaseDbRef.set(payload).then(() => {
           isLocalUpdate = false;
+        }).catch(err => {
+          isLocalUpdate = false;
+          console.error('Firebase save error:', err);
+          updateSyncStatus('offline', 'Sync Connection Failed');
         });
-      } else {
-        isLocalUpdate = false;
-      }
-    }, 300);
+      }, 300);
+    }
   }
 
   // Render incoming sync data from Firebase onto the UI
