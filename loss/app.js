@@ -502,9 +502,11 @@ function saveState(notifyBroadcast = true, syncCloud = true) {
 function initFirebaseIfConfigured() {
     if (state.firebaseConfig && window.firebase) {
         try {
-            if (!firebaseApp) {
-                firebaseApp = firebase.initializeApp(state.firebaseConfig);
-                firebaseDb = firebase.database();
+            if (!firebaseDb) {
+                const dbUrl = state.firebaseConfig?.databaseURL || "https://losscalc-app-default-rtdb.asia-southeast1.firebasedatabase.app";
+                let app = firebase.apps.length ? firebase.app() : firebase.initializeApp(state.firebaseConfig);
+                firebaseApp = app;
+                firebaseDb = firebase.database(app, dbUrl);
             }
 
             const clientsRef = firebaseDb.ref('loss_calc/clients');

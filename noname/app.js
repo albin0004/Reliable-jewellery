@@ -168,12 +168,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-      }
-
+      const dbUrl = "https://narration-52020-default-rtdb.asia-southeast1.firebasedatabase.app";
+      let app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+      
       // Dedicated isolated path for this Narration project
-      const db = firebase.database();
+      const db = firebase.database(app, dbUrl);
       firebaseDbRef = db.ref('narration_isolated_projects/narration_stock_ledger_v1');
 
       // Connection status listener
