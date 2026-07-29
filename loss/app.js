@@ -275,7 +275,8 @@ function loadState() {
                     const rowDate = c.rows && c.rows.find(r => r.date)?.date;
                     c.date = rowDate || today;
                 }
-                if (c.rows) {
+                if (Array.isArray(c.rows)) {
+                    c.rows = c.rows.filter(r => r && r.id && (!state.deletedRowIds || !state.deletedRowIds.has(r.id)));
                     c.rows.forEach(r => {
                         if (!r.image) r.image = null;
                     });
@@ -818,15 +819,16 @@ function syncToFirebase(force = false) {
         return;
     }
     try {
-        const updates = {};
         state.clients.forEach(c => {
             if (c && c.id && (!state.deletedClientIds || !state.deletedClientIds.has(c.id))) {
-                updates[`loss_calc/clients/${c.id}`] = c;
+                const cleanClient = JSON.parse(JSON.stringify(c));
+                if (Array.isArray(cleanClient.rows)) {
+                    cleanClient.rows = cleanClient.rows.filter(r => r && r.id && (!state.deletedRowIds || !state.deletedRowIds.has(r.id)));
+                }
+                firebaseDb.ref(`loss_calc/clients/${c.id}`).set(cleanClient);
             }
         });
-        if (Object.keys(updates).length > 0) {
-            firebaseDb.ref().update(updates);
-        } else if (force && isExplicitFullPurgeInProgress) {
+        if (force && isExplicitFullPurgeInProgress) {
             firebaseDb.ref('loss_calc/clients').remove();
         }
     } catch (e) {
@@ -840,7 +842,11 @@ function syncSingleClientToFirebase(clientId) {
     const client = state.clients.find(c => c.id === clientId);
     if (client && client.id) {
         try {
-            firebaseDb.ref(`loss_calc/clients/${client.id}`).set(client);
+            const cleanClient = JSON.parse(JSON.stringify(client));
+            if (Array.isArray(cleanClient.rows)) {
+                cleanClient.rows = cleanClient.rows.filter(r => r && r.id && (!state.deletedRowIds || !state.deletedRowIds.has(r.id)));
+            }
+            firebaseDb.ref(`loss_calc/clients/${client.id}`).set(cleanClient);
         } catch (e) {
             console.error('Single client sync error:', e);
         }
@@ -873,15 +879,20 @@ function deleteRowFromCloud(clientId, rowId) {
 
     if (firebaseDb) {
         try {
-            const updates = {};
-            updates[`loss_calc/deleted_rows/${rowId}`] = Date.now();
+            // 1. Record row tombstone in Firebase
+            firebaseDb.ref(`loss_calc/deleted_rows/${rowId}`).set(Date.now());
+
+            // 2. Use .set() to replace the client payload and wipe removed array elements from Firebase
             if (clientId) {
                 const client = state.clients.find(c => c.id === clientId);
                 if (client && client.id) {
-                    updates[`loss_calc/clients/${clientId}`] = client;
+                    const cleanClient = JSON.parse(JSON.stringify(client));
+                    if (Array.isArray(cleanClient.rows)) {
+                        cleanClient.rows = cleanClient.rows.filter(r => r && r.id && (!state.deletedRowIds || !state.deletedRowIds.has(r.id)));
+                    }
+                    firebaseDb.ref(`loss_calc/clients/${clientId}`).set(cleanClient);
                 }
             }
-            firebaseDb.ref().update(updates);
         } catch (e) {
             console.error('Firebase row delete error:', e);
         }
