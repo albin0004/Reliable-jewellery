@@ -35,6 +35,7 @@ let firebaseApp = null;
 let firebaseDb = null;
 let cropperInstance = null;
 let isRemoteUpdateInProgress = false;
+let isInitialCloudLoadComplete = false; // Flag to prevent pushing empty state before cloud snapshot completes
 
 // DOM Elements
 const sidebar = document.getElementById('sidebar');
@@ -195,7 +196,7 @@ function broadcastStateChange() {
     syncToFirebase();
 }
 
-// Local Storage Loader
+// Local Storage Loader & Auto Recovery
 function loadState() {
     const saved = localStorage.getItem('lossCalcState');
     if (saved) {
@@ -232,6 +233,205 @@ function loadState() {
             console.error("Failed to parse state from storage", e);
         }
     }
+
+    // Auto-recovery check: if state.clients is empty, scan local storage for any backup datasets
+    if (!state.clients || state.clients.length === 0) {
+        try {
+            const backups = getAutoBackups();
+            if (backups.length > 0 && backups[0].dataStr) {
+                const restored = JSON.parse(backups[0].dataStr);
+                if (Array.isArray(restored) && restored.length > 0) {
+                    state.clients = restored;
+                    console.log('🔄 Auto-restored data from local backup snapshot');
+                }
+            }
+        } catch (e) {}
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// AUTOMATIC BACKUP & DATA RECOVERY SYSTEM
+// ═══════════════════════════════════════════════════
+
+function createAutoBackup(label = 'Auto Save') {
+    if (!state.clients || state.clients.length === 0) return;
+    try {
+        const backupsRaw = localStorage.getItem('lossCalcBackups');
+        let backups = backupsRaw ? JSON.parse(backupsRaw) : [];
+        if (!Array.isArray(backups)) backups = [];
+
+        const currentDataStr = JSON.stringify(state.clients);
+        if (backups.length > 0 && backups[0].dataStr === currentDataStr) {
+            return;
+        }
+
+        const newBackup = {
+            id: 'backup_' + Date.now(),
+            timestamp: new Date().toISOString(),
+            label: label,
+            clientCount: state.clients.length,
+            rowCount: state.clients.reduce((sum, c) => sum + (c.rows ? c.rows.length : 0), 0),
+            dataStr: currentDataStr
+        };
+
+        backups.unshift(newBackup);
+        if (backups.length > 10) backups = backups.slice(0, 10);
+
+        localStorage.setItem('lossCalcBackups', JSON.stringify(backups));
+        updateBackupUI();
+    } catch (e) {
+        console.warn('Could not save auto-backup', e);
+    }
+}
+
+function getAutoBackups() {
+    try {
+        const backupsRaw = localStorage.getItem('lossCalcBackups');
+        if (!backupsRaw) return [];
+        const backups = JSON.parse(backupsRaw);
+        return Array.isArray(backups) ? backups : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function restoreBackup(backupId) {
+    const backups = getAutoBackups();
+    const target = backups.find(b => b.id === backupId);
+    if (!target) return false;
+
+    try {
+        const restoredClients = JSON.parse(target.dataStr);
+        if (Array.isArray(restoredClients)) {
+            state.clients = mergeClientData(state.clients, restoredClients);
+            saveState(true, true);
+            render();
+            showToastNotification(`Restored backup from ${new Date(target.timestamp).toLocaleString()}!`, 'sync');
+            return true;
+        }
+    } catch (e) {
+        console.error('Failed to restore backup', e);
+    }
+    return false;
+}
+
+function scanAndRecoverLostData() {
+    const foundClients = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('loss') || key.includes('state') || key.includes('backup') || key.includes('client'))) {
+            try {
+                const val = localStorage.getItem(key);
+                if (!val) continue;
+                const parsed = JSON.parse(val);
+                let candClients = null;
+                if (Array.isArray(parsed)) candClients = parsed;
+                else if (parsed && Array.isArray(parsed.clients)) candClients = parsed.clients;
+                else if (parsed && parsed.dataStr) candClients = JSON.parse(parsed.dataStr);
+
+                if (Array.isArray(candClients) && candClients.length > 0) {
+                    candClients.forEach(c => {
+                        if (c && c.id && c.name) foundClients.push(c);
+                    });
+                }
+            } catch (e) {}
+        }
+    }
+
+    if (foundClients.length > 0) {
+        const beforeCount = state.clients.length;
+        state.clients = mergeClientData(state.clients, foundClients);
+        saveState(true, true);
+        render();
+        showToastNotification(`Scan complete! Recovered ${foundClients.length} client record(s) into your workspace!`, 'sync');
+    } else {
+        showToastNotification('Scan complete: No additional lost backups found in local storage.', 'sync');
+    }
+}
+
+function updateBackupUI() {
+    const container = document.getElementById('backup-list-container');
+    if (!container) return;
+
+    const backups = getAutoBackups();
+    if (backups.length === 0) {
+        container.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem;">No local backups stored yet.</p>`;
+        return;
+    }
+
+    container.innerHTML = backups.map(b => {
+        const timeStr = new Date(b.timestamp).toLocaleString();
+        return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 6px 0; border-bottom: 1px dashed #cbd5e1; font-size: 0.82rem;">
+                <div>
+                    <strong>${b.label || 'Backup'}</strong> — <span style="color:var(--text-secondary);">${timeStr}</span>
+                    <span style="display:block; font-size:0.75rem; color:var(--text-muted);">${b.clientCount} clients, ${b.rowCount} rows</span>
+                </div>
+                <button type="button" class="btn btn-secondary btn-restore-backup" data-backup-id="${b.id}" style="padding: 2px 8px; font-size: 0.75rem;">Restore</button>
+            </div>
+        `;
+    }).join('');
+
+    container.querySelectorAll('.btn-restore-backup').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const bId = e.target.dataset.backupId;
+            if (confirm('Restore this backup version? Current data will be safely merged with restored data.')) {
+                restoreBackup(bId);
+            }
+        });
+    });
+}
+
+function mergeClientData(localClients = [], remoteClients = []) {
+    const mergedMap = new Map();
+
+    const processClient = (c) => {
+        if (!c || !c.id) return;
+        const normName = normalizeClientName(c.name);
+
+        let existingKey = null;
+        for (let [key, existing] of mergedMap.entries()) {
+            if (existing.id === c.id || (normName && normalizeClientName(existing.name) === normName)) {
+                existingKey = key;
+                break;
+            }
+        }
+
+        if (!existingKey) {
+            const clone = JSON.parse(JSON.stringify(c));
+            if (!Array.isArray(clone.rows)) clone.rows = [];
+            mergedMap.set(c.id, clone);
+        } else {
+            const target = mergedMap.get(existingKey);
+            if (!target.date && c.date) target.date = c.date;
+
+            const existingRowMap = new Map();
+            target.rows.forEach(r => { if (r && r.id) existingRowMap.set(r.id, r); });
+
+            (c.rows || []).forEach(r => {
+                if (!r) return;
+                if (r.id && existingRowMap.has(r.id)) {
+                    const existingRow = existingRowMap.get(r.id);
+                    if (r.item && (!existingRow.item || r.item.length > existingRow.item.length)) {
+                        existingRow.item = r.item;
+                    }
+                    if (r.col3 !== undefined && r.col3 !== '') existingRow.col3 = r.col3;
+                    if (r.col4 !== undefined && r.col4 !== '') existingRow.col4 = r.col4;
+                    if (r.col5 !== undefined && r.col5 !== '') existingRow.col5 = r.col5;
+                    if (r.image) existingRow.image = r.image;
+                } else {
+                    target.rows.push(JSON.parse(JSON.stringify(r)));
+                    if (r.id) existingRowMap.set(r.id, r);
+                }
+            });
+        }
+    };
+
+    (localClients || []).forEach(processClient);
+    (remoteClients || []).forEach(processClient);
+
+    return Array.from(mergedMap.values());
 }
 
 function saveState(notifyBroadcast = true, syncCloud = true) {
@@ -239,6 +439,7 @@ function saveState(notifyBroadcast = true, syncCloud = true) {
         clients: state.clients,
         firebaseConfig: state.firebaseConfig
     }));
+    createAutoBackup('Auto Save');
     updateGlobalStats();
     if (notifyBroadcast && broadcastChannel) {
         broadcastChannel.postMessage({
@@ -252,41 +453,48 @@ function saveState(notifyBroadcast = true, syncCloud = true) {
 }
 
 // Cloud Firebase Granular Real-time Synchronization & Deletion Engine
-async function initFirebaseIfConfigured() {
+function initFirebaseIfConfigured() {
     if (state.firebaseConfig && window.firebase) {
         try {
-            // Delete existing named app if it exists to re-initialize with new config
-            const existingApp = firebase.apps.find(app => app.name === 'lossApp');
-            if (existingApp) {
-                await existingApp.delete();
-                firebaseApp = null;
-                firebaseDb = null;
+            if (!firebaseApp) {
+                firebaseApp = firebase.initializeApp(state.firebaseConfig);
+                firebaseDb = firebase.database();
             }
-
-            firebaseApp = firebase.initializeApp(state.firebaseConfig, 'lossApp');
-            firebaseDb = firebaseApp.database();
 
             const clientsRef = firebaseDb.ref('loss_calc/clients');
             
-            // Initial snapshot listener for complete state alignment
+            // Initial snapshot listener with bidirectional merging & overwrite prevention
             clientsRef.on('value', (snapshot) => {
                 const data = snapshot.val();
+                isRemoteUpdateInProgress = true;
+                
+                let remoteClients = [];
                 if (data) {
-                    isRemoteUpdateInProgress = true;
-                    const remoteClients = Array.isArray(data) 
+                    remoteClients = Array.isArray(data) 
                         ? data.filter(Boolean) 
                         : Object.values(data);
-                    
-                    // Skip full DOM re-render if data matches local state (prevents focus loss on self-echoes)
-                    const isIdentical = JSON.stringify(remoteClients) === JSON.stringify(state.clients);
-                    state.clients = remoteClients;
-                    saveState(false, false);
-                    if (!isIdentical) {
-                        render();
-                    }
-                    updateSyncBadge(true, 'Cloud Sync Active');
-                    isRemoteUpdateInProgress = false;
                 }
+
+                // Smart bidirectional merge of local storage and cloud database
+                const mergedClients = mergeClientData(state.clients, remoteClients);
+                const isIdentical = JSON.stringify(mergedClients) === JSON.stringify(state.clients);
+                
+                state.clients = mergedClients;
+                saveState(false, false);
+                
+                if (!isIdentical) {
+                    render();
+                }
+
+                isInitialCloudLoadComplete = true;
+
+                // Push back to Cloud if local had new data that Cloud missed
+                if (JSON.stringify(mergedClients) !== JSON.stringify(remoteClients)) {
+                    syncToFirebase(true);
+                }
+
+                updateSyncBadge(true, 'Cloud Sync Active');
+                isRemoteUpdateInProgress = false;
             });
 
             // Granular Child Changed Listener for instant single-client node updates
@@ -294,12 +502,14 @@ async function initFirebaseIfConfigured() {
                 const updatedClient = snapshot.val();
                 if (updatedClient && updatedClient.id) {
                     isRemoteUpdateInProgress = true;
+                    createAutoBackup('Before Remote Update');
                     const idx = state.clients.findIndex(c => c.id === updatedClient.id);
                     let hasChanged = false;
 
                     if (idx !== -1) {
-                        if (JSON.stringify(state.clients[idx]) !== JSON.stringify(updatedClient)) {
-                            state.clients[idx] = updatedClient;
+                        const mergedClient = mergeClientData([state.clients[idx]], [updatedClient])[0];
+                        if (JSON.stringify(state.clients[idx]) !== JSON.stringify(mergedClient)) {
+                            state.clients[idx] = mergedClient;
                             hasChanged = true;
                         }
                     } else {
@@ -317,12 +527,14 @@ async function initFirebaseIfConfigured() {
 
             // Instant Granular Remote Deletion Listener
             clientsRef.on('child_removed', (snapshot) => {
+                if (!isInitialCloudLoadComplete) return;
                 const deletedKey = snapshot.key;
                 const deletedVal = snapshot.val();
                 const deletedId = deletedKey || (deletedVal && deletedVal.id);
                 
                 if (deletedId) {
                     const beforeCount = state.clients.length;
+                    createAutoBackup('Before Remote Deletion');
                     state.clients = state.clients.filter(c => c.id !== deletedId);
                     if (state.clients.length < beforeCount) {
                         saveState(false, false);
@@ -338,7 +550,7 @@ async function initFirebaseIfConfigured() {
                 cloudBadge.className = 'telemetry-value active';
             }
             if (cloudSyncStatusText) {
-                cloudSyncStatusText.textContent = '☁️ Cloud Realtime DB: Connected & Synced! Multi-device changes and deletions reflect instantly.';
+                cloudSyncStatusText.textContent = '☁️ Cloud Realtime DB: Connected & Synced! Multi-device changes merge and sync instantly.';
             }
             testFirebaseConnection();
             updateSyncBadge(true, 'Realtime Cloud Active');
@@ -353,22 +565,15 @@ async function initFirebaseIfConfigured() {
             cloudBadge.className = 'telemetry-value';
         }
         updateSyncBadge(true, 'Local Realtime Active');
-
-        // Clear firebase connections if they were previously configured
-        if (firebaseApp) {
-            try {
-                await firebaseApp.delete();
-            } catch (e) {
-                console.error("Error deleting firebase app:", e);
-            }
-            firebaseApp = null;
-            firebaseDb = null;
-        }
     }
 }
 
-function syncToFirebase() {
+function syncToFirebase(force = false) {
     if (isRemoteUpdateInProgress || !firebaseDb) return;
+    if (!force && !isInitialCloudLoadComplete) {
+        console.log('⏳ Cloud sync deferred until initial remote load completes');
+        return;
+    }
     try {
         const clientMap = {};
         state.clients.forEach(c => {
@@ -604,7 +809,13 @@ function setupEventListeners() {
             btnToggleConfig.textContent = 'Show Config';
         }
         testFirebaseConnection();
+        updateBackupUI();
     });
+
+    const btnScanRecover = document.getElementById('btn-scan-recover');
+    if (btnScanRecover) {
+        btnScanRecover.addEventListener('click', scanAndRecoverLostData);
+    }
     const closeSyncModal = () => {
         syncSettingsModal.classList.remove('active');
         // Reset to hidden on close
