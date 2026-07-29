@@ -168,13 +168,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      if (!firebase.apps.length) {
-        const configToUse = (typeof window.firebaseConfig !== 'undefined') ? window.firebaseConfig : firebaseConfig;
-        firebase.initializeApp(configToUse);
+      let narrationApp;
+      const existingApp = firebase.apps.find(a => a && a.name === "narrationApp");
+      if (existingApp) {
+        narrationApp = existingApp;
+      } else {
+        narrationApp = firebase.initializeApp(firebaseConfig, "narrationApp");
       }
 
-      // Dedicated isolated path for this Narration project
-      const db = firebase.database();
+      // Dedicated isolated path for this Narration project on narration-52020 database
+      const db = firebase.database(narrationApp);
       firebaseDbRef = db.ref('narration_isolated_projects/narration_stock_ledger_v1');
 
       // Connection status listener

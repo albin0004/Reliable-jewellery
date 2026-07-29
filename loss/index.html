@@ -373,6 +373,24 @@
                 </div>
 
                 <div class="form-group">
+                    <label>🔒 Firebase Realtime Database Security Rules Setup</label>
+                    <div class="sync-info-box" style="font-size: 0.82rem; line-height: 1.5; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 6px;">
+                        <p style="margin-bottom: 6px; font-weight: 600; color: #1e293b;">Fixing "PERMISSION_DENIED: Permission denied":</p>
+                        <ol style="margin: 0 0 8px 18px; padding: 0; color: #475569;">
+                            <li>Open your <a href="https://console.firebase.google.com/" target="_blank" style="color: #4f46e5; text-decoration: underline;">Firebase Console</a> project tab.</li>
+                            <li>Navigate to <strong>Build &gt; Realtime Database &gt; Rules</strong>.</li>
+                            <li>Update the rules to allow read &amp; write access, then click <strong>Publish</strong>:</li>
+                        </ol>
+                        <pre style="background: #0f172a; color: #38bdf8; padding: 8px 10px; border-radius: 4px; font-size: 0.76rem; overflow-x: auto; margin: 0; font-family: 'JetBrains Mono', monospace;">{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}</pre>
+                    </div>
+                </div>
+
+                <div class="form-group">
                     <label>Image Store Storage Usage</label>
                     <div class="sync-info-box" id="storage-telemetry-box">
                         <p>📷 Attached Photos: <strong id="telemetry-img-count">0</strong></p>

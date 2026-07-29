@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reliable-jewellery-v6';
+const CACHE_NAME = 'reliable-jewellery-v8';
 const ASSETS = [
     './',
     './index.html',

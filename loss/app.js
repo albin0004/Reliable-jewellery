@@ -17,6 +17,7 @@ const DEFAULT_FIREBASE_CONFIG = (typeof firebaseConfig !== 'undefined' && fireba
 let state = {
     clients: [],
     deletedClientIds: new Set(),
+    deletedRowIds: new Set(),
     firebaseConfig: DEFAULT_FIREBASE_CONFIG,
     pendingSyncQueue: [],
     isOnline: navigator.onLine,
@@ -228,12 +229,24 @@ function broadcastStateChange() {
 // Local Storage Loader & Auto Recovery with Tombstone Verification
 function loadState() {
     state.deletedClientIds = new Set();
+    state.deletedRowIds = new Set();
+
     const savedDel = localStorage.getItem('lossCalcDeletedIds');
     if (savedDel) {
         try {
             const parsedDel = JSON.parse(savedDel);
             if (Array.isArray(parsedDel)) {
                 state.deletedClientIds = new Set(parsedDel);
+            }
+        } catch (e) {}
+    }
+
+    const savedRowDel = localStorage.getItem('lossCalcDeletedRowIds');
+    if (savedRowDel) {
+        try {
+            const parsedRowDel = JSON.parse(savedRowDel);
+            if (Array.isArray(parsedRowDel)) {
+                state.deletedRowIds = new Set(parsedRowDel);
             }
         } catch (e) {}
     }
@@ -431,7 +444,7 @@ function updateBackupUI() {
 function mergeClientData(localClients = [], remoteClients = []) {
     const mergedMap = new Map();
 
-    const processClient = (c) => {
+    const processClient = (c, isRemote = false) => {
         if (!c || !c.id) return;
         // Strict Tombstone Shield: Never resurrect a client that was deleted locally or remotely!
         if (state.deletedClientIds && state.deletedClientIds.has(c.id)) return;
@@ -439,6 +452,8 @@ function mergeClientData(localClients = [], remoteClients = []) {
         if (!mergedMap.has(c.id)) {
             const clone = JSON.parse(JSON.stringify(c));
             if (!Array.isArray(clone.rows)) clone.rows = [];
+            // Exclude deleted rows
+            clone.rows = clone.rows.filter(r => r && r.id && (!state.deletedRowIds || !state.deletedRowIds.has(r.id)));
             mergedMap.set(c.id, clone);
         } else {
             const target = mergedMap.get(c.id);
@@ -448,7 +463,7 @@ function mergeClientData(localClients = [], remoteClients = []) {
             target.rows.forEach(r => { if (r && r.id) existingRowMap.set(r.id, r); });
 
             (c.rows || []).forEach(r => {
-                if (!r) return;
+                if (!r || (state.deletedRowIds && state.deletedRowIds.has(r.id))) return;
                 if (r.id && existingRowMap.has(r.id)) {
                     const existingRow = existingRowMap.get(r.id);
                     // Smart 3-tier field-level merge for exact same transaction card
@@ -464,13 +479,36 @@ function mergeClientData(localClients = [], remoteClients = []) {
                     existingRowMap.set(r.id, r);
                 }
             });
+
+            // When merging remote client data:
+            // Any row in target.rows missing from remote c.rows should be pruned if remote c.rows is populated
+            if (isRemote && Array.isArray(c.rows)) {
+                const remoteRowIdSet = new Set(c.rows.map(r => r && r.id).filter(Boolean));
+                target.rows = target.rows.filter(r => {
+                    if (!r || !r.id) return false;
+                    if (state.deletedRowIds && state.deletedRowIds.has(r.id)) return false;
+                    if (!remoteRowIdSet.has(r.id)) {
+                        if (!state.deletedRowIds) state.deletedRowIds = new Set();
+                        state.deletedRowIds.add(r.id);
+                        return false;
+                    }
+                    return true;
+                });
+            }
         }
     };
 
-    (localClients || []).forEach(c => processClient(c));
-    (remoteClients || []).forEach(c => processClient(c));
+    (localClients || []).forEach(c => processClient(c, false));
+    (remoteClients || []).forEach(c => processClient(c, true));
 
-    return Array.from(mergedMap.values());
+    const result = Array.from(mergedMap.values());
+    result.forEach(client => {
+        if (Array.isArray(client.rows)) {
+            client.rows = client.rows.filter(r => r && r.id && (!state.deletedRowIds || !state.deletedRowIds.has(r.id)));
+        }
+    });
+
+    return result;
 }
 
 function saveState(notifyBroadcast = true, syncCloud = true) {
@@ -480,6 +518,9 @@ function saveState(notifyBroadcast = true, syncCloud = true) {
     }));
     if (state.deletedClientIds) {
         localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
+    }
+    if (state.deletedRowIds) {
+        localStorage.setItem('lossCalcDeletedRowIds', JSON.stringify(Array.from(state.deletedRowIds)));
     }
     createAutoBackup('Auto Save');
     updateGlobalStats();
@@ -507,156 +548,223 @@ function initFirebaseIfConfigured() {
                 firebaseDb = firebase.database();
             }
 
-            const clientsRef = firebaseDb.ref('loss_calc/clients');
-            const deletedRef = firebaseDb.ref('loss_calc/deleted_clients');
-            isInitialCloudLoadComplete = false;
+            const startFirebaseSync = () => {
+                const clientsRef = firebaseDb.ref('loss_calc/clients');
+                const deletedRef = firebaseDb.ref('loss_calc/deleted_clients');
+                const deletedRowsRef = firebaseDb.ref('loss_calc/deleted_rows');
+                isInitialCloudLoadComplete = false;
 
-            // 1. Listen for remote tombstones continuously
-            deletedRef.on('child_added', (snapshot) => {
-                const delId = snapshot.key;
-                if (delId) {
-                    if (!state.deletedClientIds) state.deletedClientIds = new Set();
-                    if (!state.deletedClientIds.has(delId)) {
-                        state.deletedClientIds.add(delId);
+                // 1a. Listen for remote client tombstones continuously
+                deletedRef.on('child_added', (snapshot) => {
+                    const delId = snapshot.key;
+                    if (delId) {
+                        if (!state.deletedClientIds) state.deletedClientIds = new Set();
+                        if (!state.deletedClientIds.has(delId)) {
+                            state.deletedClientIds.add(delId);
+                            localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
+                            const beforeLen = state.clients.length;
+                            state.clients = state.clients.filter(c => c && c.id !== delId);
+                            if (state.clients.length !== beforeLen) {
+                                saveState(false, false);
+                                render();
+                            }
+                        }
+                    }
+                }, (err) => {
+                    if (err && (err.code === 'PERMISSION_DENIED' || err.message?.includes('PERMISSION_DENIED'))) {
+                        updateSyncConnectionState(false, '⚠️ PERMISSION_DENIED: Firebase Security Rules block database access. Please set rules to allow read/write in Firebase Console.');
+                    }
+                });
+
+                // 1b. Listen for remote row tombstones continuously
+                deletedRowsRef.on('child_added', (snapshot) => {
+                    const delRowId = snapshot.key;
+                    if (delRowId) {
+                        if (!state.deletedRowIds) state.deletedRowIds = new Set();
+                        if (!state.deletedRowIds.has(delRowId)) {
+                            state.deletedRowIds.add(delRowId);
+                            localStorage.setItem('lossCalcDeletedRowIds', JSON.stringify(Array.from(state.deletedRowIds)));
+                            let rowRemoved = false;
+                            state.clients.forEach(c => {
+                                if (Array.isArray(c.rows)) {
+                                    const beforeCount = c.rows.length;
+                                    c.rows = c.rows.filter(r => r && r.id !== delRowId);
+                                    if (c.rows.length !== beforeCount) rowRemoved = true;
+                                }
+                            });
+                            if (rowRemoved) {
+                                saveState(false, false);
+                                render();
+                                showToastNotification('Remote sync: Transaction row deleted', 'sync');
+                            }
+                        }
+                    }
+                });
+
+                // 2. Fetch remote tombstones once before retrieving clients
+                deletedRowsRef.once('value').then(rowDelSnap => {
+                    const rowDelData = rowDelSnap.val();
+                    if (rowDelData) {
+                        Object.keys(rowDelData).forEach(id => state.deletedRowIds.add(id));
+                        localStorage.setItem('lossCalcDeletedRowIds', JSON.stringify(Array.from(state.deletedRowIds)));
+                    }
+                    return deletedRef.once('value');
+                }).then(delSnap => {
+                    const delData = delSnap.val();
+                    if (delData) {
+                        Object.keys(delData).forEach(id => state.deletedClientIds.add(id));
                         localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
-                        const beforeLen = state.clients.length;
-                        state.clients = state.clients.filter(c => c && c.id !== delId);
-                        if (state.clients.length !== beforeLen) {
+                    }
+
+                    // 3. SAFE INITIAL FETCH LOCK: Download remote snapshot ONCE
+                    return clientsRef.once('value');
+                }).then(snapshot => {
+                    const data = snapshot.val();
+                    let remoteClients = [];
+                    if (data) {
+                        remoteClients = (Array.isArray(data) ? data.filter(Boolean) : Object.values(data))
+                            .filter(c => c && c.id && !state.deletedClientIds.has(c.id));
+                    }
+
+                    if (remoteClients.length > 0) {
+                        state.clients = mergeClientData(state.clients, remoteClients);
+                        saveState(false, false);
+                        render();
+                    } else if (state.clients.length > 0) {
+                        syncToFirebase(true);
+                    }
+
+                    isInitialCloudLoadComplete = true;
+                    console.log('✅ Initial cloud sync with tombstone verification completed.');
+                    updateSyncBadge(true, 'Cloud Sync Active');
+                }).catch(err => {
+                    console.warn('Initial cloud snapshot fetch error:', err);
+                    isInitialCloudLoadComplete = true;
+                    if (err && (err.code === 'PERMISSION_DENIED' || err.message?.includes('PERMISSION_DENIED'))) {
+                        updateSyncConnectionState(false, '⚠️ PERMISSION_DENIED: Firebase Security Rules block database access. Set rules to allow read/write in Firebase Console.');
+                    }
+                });
+
+                // 4. REAL-TIME CONTINUOUS VALUE LISTENER (with empty-override protection)
+                clientsRef.on('value', (snapshot) => {
+                    if (!isInitialCloudLoadComplete || isExplicitFullPurgeInProgress) return;
+
+                    const data = snapshot.val();
+                    isRemoteUpdateInProgress = true;
+
+                    let remoteClients = [];
+                    if (data) {
+                        remoteClients = (Array.isArray(data) ? data.filter(Boolean) : Object.values(data))
+                            .filter(c => c && c.id && !state.deletedClientIds.has(c.id));
+                    }
+
+                    if (remoteClients.length === 0 && state.clients.length > 0 && !isExplicitFullPurgeInProgress) {
+                        console.warn('🛡️ Received empty remote snapshot while local has data. Preserving local state.');
+                        isRemoteUpdateInProgress = false;
+                        return;
+                    }
+
+                    const mergedClients = mergeClientData(state.clients, remoteClients);
+                    const isIdentical = JSON.stringify(mergedClients) === JSON.stringify(state.clients);
+
+                    state.clients = mergedClients;
+                    saveState(false, false);
+
+                    if (!isIdentical) {
+                        render();
+                    }
+
+                    isRemoteUpdateInProgress = false;
+                }, (err) => {
+                    if (err && (err.code === 'PERMISSION_DENIED' || err.message?.includes('PERMISSION_DENIED'))) {
+                        updateSyncConnectionState(false, '⚠️ PERMISSION_DENIED: Firebase Security Rules block access. Please update Rules in Firebase Console.');
+                    }
+                });
+
+                // 5. GRANULAR CHILD CHANGED LISTENER
+                clientsRef.on('child_changed', (snapshot) => {
+                    if (!isInitialCloudLoadComplete || isExplicitFullPurgeInProgress) return;
+                    const updatedClient = snapshot.val();
+                    if (updatedClient && updatedClient.id && !state.deletedClientIds.has(updatedClient.id)) {
+                        isRemoteUpdateInProgress = true;
+                        createAutoBackup('Before Remote Update');
+                        const idx = state.clients.findIndex(c => c.id === updatedClient.id);
+                        let hasChanged = false;
+
+                        if (idx !== -1) {
+                            const mergedClient = mergeClientData([state.clients[idx]], [updatedClient])[0];
+                            if (mergedClient && JSON.stringify(state.clients[idx]) !== JSON.stringify(mergedClient)) {
+                                state.clients[idx] = mergedClient;
+                                hasChanged = true;
+                            }
+                        } else {
+                            state.clients.push(updatedClient);
+                            hasChanged = true;
+                        }
+
+                        if (hasChanged) {
                             saveState(false, false);
                             render();
                         }
+                        isRemoteUpdateInProgress = false;
                     }
-                }
-            });
+                });
 
-            // 2. Fetch remote tombstones once before retrieving clients
-            deletedRef.once('value').then(delSnap => {
-                const delData = delSnap.val();
-                if (delData) {
-                    Object.keys(delData).forEach(id => state.deletedClientIds.add(id));
-                    localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
-                }
+                // 6. GRANULAR CHILD REMOVED LISTENER
+                clientsRef.on('child_removed', (snapshot) => {
+                    if (!isInitialCloudLoadComplete || isExplicitFullPurgeInProgress) return;
+                    const deletedKey = snapshot.key;
+                    const deletedVal = snapshot.val();
+                    const deletedId = deletedKey || (deletedVal && deletedVal.id);
 
-                // 3. SAFE INITIAL FETCH LOCK: Download remote snapshot ONCE
-                return clientsRef.once('value');
-            }).then(snapshot => {
-                const data = snapshot.val();
-                let remoteClients = [];
-                if (data) {
-                    remoteClients = (Array.isArray(data) ? data.filter(Boolean) : Object.values(data))
-                        .filter(c => c && c.id && !state.deletedClientIds.has(c.id));
-                }
+                    if (deletedId) {
+                        if (!state.deletedClientIds) state.deletedClientIds = new Set();
+                        state.deletedClientIds.add(deletedId);
+                        localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
 
-                if (remoteClients.length > 0) {
-                    state.clients = mergeClientData(state.clients, remoteClients);
-                    saveState(false, false);
-                    render();
-                } else if (state.clients.length > 0) {
-                    syncToFirebase(true);
-                }
-
-                isInitialCloudLoadComplete = true;
-                console.log('✅ Initial cloud sync with tombstone verification completed.');
-                updateSyncBadge(true, 'Cloud Sync Active');
-            }).catch(err => {
-                console.warn('Initial cloud snapshot fetch error:', err);
-                isInitialCloudLoadComplete = true;
-            });
-
-            // 4. REAL-TIME CONTINUOUS VALUE LISTENER (with empty-override protection)
-            clientsRef.on('value', (snapshot) => {
-                if (!isInitialCloudLoadComplete || isExplicitFullPurgeInProgress) return;
-
-                const data = snapshot.val();
-                isRemoteUpdateInProgress = true;
-
-                let remoteClients = [];
-                if (data) {
-                    remoteClients = (Array.isArray(data) ? data.filter(Boolean) : Object.values(data))
-                        .filter(c => c && c.id && !state.deletedClientIds.has(c.id));
-                }
-
-                if (remoteClients.length === 0 && state.clients.length > 0 && !isExplicitFullPurgeInProgress) {
-                    console.warn('🛡️ Received empty remote snapshot while local has data. Preserving local state.');
-                    isRemoteUpdateInProgress = false;
-                    return;
-                }
-
-                const mergedClients = mergeClientData(state.clients, remoteClients);
-                const isIdentical = JSON.stringify(mergedClients) === JSON.stringify(state.clients);
-
-                state.clients = mergedClients;
-                saveState(false, false);
-
-                if (!isIdentical) {
-                    render();
-                }
-
-                isRemoteUpdateInProgress = false;
-            });
-
-            // 5. GRANULAR CHILD CHANGED LISTENER
-            clientsRef.on('child_changed', (snapshot) => {
-                if (!isInitialCloudLoadComplete || isExplicitFullPurgeInProgress) return;
-                const updatedClient = snapshot.val();
-                if (updatedClient && updatedClient.id && !state.deletedClientIds.has(updatedClient.id)) {
-                    isRemoteUpdateInProgress = true;
-                    createAutoBackup('Before Remote Update');
-                    const idx = state.clients.findIndex(c => c.id === updatedClient.id);
-                    let hasChanged = false;
-
-                    if (idx !== -1) {
-                        const mergedClient = mergeClientData([state.clients[idx]], [updatedClient])[0];
-                        if (mergedClient && JSON.stringify(state.clients[idx]) !== JSON.stringify(mergedClient)) {
-                            state.clients[idx] = mergedClient;
-                            hasChanged = true;
+                        const beforeCount = state.clients.length;
+                        state.clients = state.clients.filter(c => c && c.id !== deletedId);
+                        if (state.clients.length < beforeCount) {
+                            saveState(false, false);
+                            render();
+                            showToastNotification('Remote sync: Client deleted permanently across all devices', 'sync');
                         }
+                    }
+                });
+
+                // 7. LISTEN FOR REAL-TIME CONNECTION STATE FROM FIREBASE
+                firebaseDb.ref('.info/connected').on('value', (snap) => {
+                    const connected = snap.val() === true;
+                    if (connected) {
+                        updateSyncConnectionState(true, 'Realtime Cloud Active');
                     } else {
-                        state.clients.push(updatedClient);
-                        hasChanged = true;
+                        updateSyncConnectionState(false, '⚠️ Real-time synchronization connection is not established. Operating in local mode.');
                     }
+                });
 
-                    if (hasChanged) {
-                        saveState(false, false);
-                        render();
-                    }
-                    isRemoteUpdateInProgress = false;
-                }
-            });
+                testFirebaseConnection();
+            };
 
-            // 6. GRANULAR CHILD REMOVED LISTENER
-            clientsRef.on('child_removed', (snapshot) => {
-                if (!isInitialCloudLoadComplete || isExplicitFullPurgeInProgress) return;
-                const deletedKey = snapshot.key;
-                const deletedVal = snapshot.val();
-                const deletedId = deletedKey || (deletedVal && deletedVal.id);
-
-                if (deletedId) {
-                    if (!state.deletedClientIds) state.deletedClientIds = new Set();
-                    state.deletedClientIds.add(deletedId);
-                    localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
-
-                    const beforeCount = state.clients.length;
-                    state.clients = state.clients.filter(c => c && c.id !== deletedId);
-                    if (state.clients.length < beforeCount) {
-                        saveState(false, false);
-                        render();
-                        showToastNotification('Remote sync: Client deleted permanently across all devices', 'sync');
-                    }
-                }
-            });
-
-            // 7. LISTEN FOR REAL-TIME CONNECTION STATE FROM FIREBASE
-            firebaseDb.ref('.info/connected').on('value', (snap) => {
-                const connected = snap.val() === true;
-                if (connected) {
-                    updateSyncConnectionState(true, 'Realtime Cloud Active');
+            // Attempt anonymous authentication if auth module is loaded & user not authenticated
+            if (window.firebase && firebase.auth) {
+                const auth = firebase.auth();
+                if (!auth.currentUser) {
+                    auth.signInAnonymously()
+                        .then(() => {
+                            console.log('🔑 Anonymous Firebase Auth session established.');
+                            startFirebaseSync();
+                        })
+                        .catch(err => {
+                            console.warn('Anonymous auth failed or not enabled in Firebase Console:', err);
+                            startFirebaseSync();
+                        });
                 } else {
-                    updateSyncConnectionState(false, '⚠️ Real-time synchronization connection is not established. Operating in local mode.');
+                    startFirebaseSync();
                 }
-            });
+            } else {
+                startFirebaseSync();
+            }
 
-            testFirebaseConnection();
         } catch (e) {
             console.error('Firebase init error:', e);
             updateSyncConnectionState(false, '⚠️ Real-time synchronization connection is not established.');
@@ -757,6 +865,29 @@ function deleteClientFromCloud(clientId) {
     }
 }
 
+function deleteRowFromCloud(clientId, rowId) {
+    if (!rowId) return;
+    if (!state.deletedRowIds) state.deletedRowIds = new Set();
+    state.deletedRowIds.add(rowId);
+    localStorage.setItem('lossCalcDeletedRowIds', JSON.stringify(Array.from(state.deletedRowIds)));
+
+    if (firebaseDb) {
+        try {
+            const updates = {};
+            updates[`loss_calc/deleted_rows/${rowId}`] = Date.now();
+            if (clientId) {
+                const client = state.clients.find(c => c.id === clientId);
+                if (client && client.id) {
+                    updates[`loss_calc/clients/${clientId}`] = client;
+                }
+            }
+            firebaseDb.ref().update(updates);
+        } catch (e) {
+            console.error('Firebase row delete error:', e);
+        }
+    }
+}
+
 function testFirebaseConnection() {
     const pingSpan = document.getElementById('sync-ping');
     const broadcastStatus = document.getElementById('broadcast-status');
@@ -766,17 +897,32 @@ function testFirebaseConnection() {
     }
 
     if (firebaseDb) {
-        const start = Date.now();
-        const testRef = firebaseDb.ref('loss_calc/_telemetry/ping');
-        testRef.set(start).then(() => {
-            const rtt = Date.now() - start;
-            state.syncPingMs = rtt;
-            if (pingSpan) pingSpan.textContent = `${rtt}ms`;
-            showToastNotification(`Database ping test: ${rtt}ms latency`, 'sync');
-        }).catch(err => {
-            if (pingSpan) pingSpan.textContent = 'Offline';
-            showToastNotification(`Cloud ping failed: ${err.message}`, 'danger');
-        });
+        const runPing = () => {
+            const start = Date.now();
+            const testRef = firebaseDb.ref('loss_calc/_telemetry/ping');
+            testRef.set(start).then(() => {
+                const rtt = Date.now() - start;
+                state.syncPingMs = rtt;
+                if (pingSpan) pingSpan.textContent = `${rtt}ms`;
+                showToastNotification(`Database ping test: ${rtt}ms latency`, 'sync');
+            }).catch(err => {
+                if (pingSpan) pingSpan.textContent = 'Rules Error';
+                if (err && (err.code === 'PERMISSION_DENIED' || err.message?.includes('PERMISSION_DENIED'))) {
+                    showToastNotification(`Cloud ping failed: PERMISSION_DENIED (Update Rules in Firebase Console)`, 'danger');
+                    updateSyncConnectionState(false, '⚠️ PERMISSION_DENIED: Firebase Security Rules block access. Go to Firebase Console > Realtime Database > Rules and set ".read": true, ".write": true');
+                } else {
+                    showToastNotification(`Cloud ping failed: ${err.message}`, 'danger');
+                }
+            });
+        };
+
+        if (window.firebase && firebase.auth && !firebase.auth().currentUser) {
+            firebase.auth().signInAnonymously()
+                .then(() => runPing())
+                .catch(() => runPing());
+        } else {
+            runPing();
+        }
     } else {
         if (pingSpan) pingSpan.textContent = 'Local 0ms';
         showToastNotification('Running in local offline realtime mode', 'sync');
@@ -1265,10 +1411,15 @@ function deleteRow(clientId, rowId) {
         const row = client.rows.find(r => r.id === rowId);
         const itemName = (row && row.item && row.item.trim()) ? `"${row.item.trim()}"` : 'this row';
         if (confirm(`Are you sure you really want to delete ${itemName}?`)) {
+            if (!state.deletedRowIds) state.deletedRowIds = new Set();
+            state.deletedRowIds.add(rowId);
+            localStorage.setItem('lossCalcDeletedRowIds', JSON.stringify(Array.from(state.deletedRowIds)));
+
             client.rows = client.rows.filter(r => r.id !== rowId);
             saveState();
             render();
-            showToastNotification('Row deleted successfully', 'danger');
+            deleteRowFromCloud(clientId, rowId);
+            showToastNotification('Row deleted successfully across all synced devices', 'danger');
         }
     }
 }
