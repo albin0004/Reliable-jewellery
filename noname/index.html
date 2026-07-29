@@ -11,13 +11,13 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="NARRATION - Stock Reconciliation Ledger">
+  <meta name="description" content="NARRATION - Stock Reconciliation & Management Ledger">
   <title>NARRATION | Stock Reconciliation</title>
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -25,12 +25,15 @@
   <!-- html2canvas for Image Export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
+  <!-- Firebase App & Realtime Database SDKs (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-wrapper">
     
-    <!-- Header with Download Button -->
+    <!-- Top Header -->
     <header class="app-header">
       <div class="brand">
         <a href="../index.html" class="back-btn" title="Back to Homepage" style="margin-right: 1.5rem; display: inline-flex; text-decoration: none;">
@@ -38,7 +41,7 @@
           <span>Back</span>
         </a>
         <div class="brand-icon">
-          <i data-lucide="clipboard-list"></i>
+          <i data-lucide="gem"></i>
         </div>
         <div class="brand-text">
           <h1>NARRATION</h1>
@@ -46,7 +49,11 @@
       </div>
 
       <div class="header-controls">
-        <button id="headerDownloadBtn" class="btn btn-primary header-download-btn" title="Export table view as PNG image">
+        <div id="syncBadge" class="sync-status-badge connecting" title="Real-Time Sync Status">
+          <span class="sync-dot"></span>
+          <span id="syncStatusText">Syncing...</span>
+        </div>
+        <button id="headerDownloadBtn" class="btn btn-primary header-download-btn" title="Export full report view as PNG image">
           <i data-lucide="download"></i>
           <span>Download</span>
         </button>
@@ -57,6 +64,12 @@
     <main class="main-content" id="mainCaptureArea">
       
       <div class="table-card">
+        <!-- Real-Time Connection Warning Banner -->
+        <div id="syncWarningBanner" class="sync-warning-banner hidden" data-html2canvas-ignore="true">
+          <i data-lucide="alert-triangle"></i>
+          <span>Real-time synchronization connection is not established. Working in offline mode (changes saved locally).</span>
+        </div>
+
         <div class="table-header-row">
           <div class="table-info" data-html2canvas-ignore="true">
             <i data-lucide="database"></i>
@@ -121,7 +134,7 @@
               <tr class="summary-tr">
                 <td colspan="5" class="summary-label-cell">PHYSICAL STOCK</td>
                 <td class="summary-value-cell input-cell">
-                  <input type="number" id="physicalStockInput" step="any" placeholder="" class="summary-table-input">
+                  <input type="number" id="physicalStockInput" step="0.01" placeholder="" class="summary-table-input">
                 </td>
                 <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
               </tr>
@@ -142,6 +155,23 @@
     <div id="toast" class="toast hidden">
       <i data-lucide="check-circle" id="toastIcon"></i>
       <span id="toastMessage">Action completed successfully</span>
+    </div>
+
+    <!-- Confirm Delete Row Modal -->
+    <div id="confirmModal" class="modal-overlay hidden" data-html2canvas-ignore="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-icon warning">
+            <i data-lucide="alert-circle"></i>
+          </div>
+          <h3>Delete Row</h3>
+        </div>
+        <p class="modal-message">Are you sure you want to delete this row? This action cannot be undone.</p>
+        <div class="modal-actions">
+          <button id="cancelDeleteBtn" class="btn btn-outline">Cancel</button>
+          <button id="confirmDeleteBtn" class="btn btn-danger">Delete Row</button>
+        </div>
+      </div>
     </div>
 
   </div>

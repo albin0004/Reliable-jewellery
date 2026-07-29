@@ -16,6 +16,7 @@ const DEFAULT_FIREBASE_CONFIG = {
 // Global State
 let state = {
     clients: [],
+    deletedClientIds: new Set(),
     firebaseConfig: DEFAULT_FIREBASE_CONFIG,
     pendingSyncQueue: [],
     isOnline: navigator.onLine,
@@ -36,6 +37,31 @@ let firebaseDb = null;
 let cropperInstance = null;
 let isRemoteUpdateInProgress = false;
 let isInitialCloudLoadComplete = false; // Flag to prevent pushing empty state before cloud snapshot completes
+let isExplicitFullPurgeInProgress = false;
+let singleClientSyncTimers = {};
+let pendingDeleteAction = null;
+
+function requestSecureDeletion(warningMessage, onConfirmCallback) {
+    pendingDeleteAction = onConfirmCallback;
+    const warningText = document.getElementById('sec-del-warning-text');
+    if (warningText) warningText.textContent = warningMessage;
+
+    const secModal = document.getElementById('security-delete-modal');
+    const input = document.getElementById('sec-del-confirm-input');
+    const btn = document.getElementById('btn-confirm-sec-del');
+    const reqWord = document.getElementById('sec-del-required-word');
+
+    if (reqWord) reqWord.textContent = '7722';
+
+    if (secModal) {
+        secModal.classList.add('active');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+        if (btn) btn.disabled = true;
+    }
+}
 
 // DOM Elements
 const sidebar = document.getElementById('sidebar');
@@ -108,12 +134,18 @@ function init() {
 
 // Real-Time Animated Toast Notification System
 function showToastNotification(message, type = 'success') {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position:fixed; bottom:2rem; right:2rem; z-index:9999; display:flex; flex-direction:column; gap:0.5rem; pointer-events:none;';
+        document.body.appendChild(container);
+    }
 
     const toast = document.createElement('div');
-    const toastClass = (type === 'danger' || type.includes('http')) ? 'toast-danger' : (type === 'sync' ? 'toast-sync' : 'toast-success');
+    const toastClass = (type === 'danger' || type === 'http') ? 'toast-danger' : (type === 'sync' ? 'toast-sync' : 'toast-success');
     toast.className = `toast ${toastClass}`;
+    toast.style.pointerEvents = 'auto';
 
     toast.innerHTML = `
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -196,8 +228,19 @@ function broadcastStateChange() {
     syncToFirebase();
 }
 
-// Local Storage Loader & Auto Recovery
+// Local Storage Loader & Auto Recovery with Tombstone Verification
 function loadState() {
+    state.deletedClientIds = new Set();
+    const savedDel = localStorage.getItem('lossCalcDeletedIds');
+    if (savedDel) {
+        try {
+            const parsedDel = JSON.parse(savedDel);
+            if (Array.isArray(parsedDel)) {
+                state.deletedClientIds = new Set(parsedDel);
+            }
+        } catch (e) {}
+    }
+
     const saved = localStorage.getItem('lossCalcState');
     if (saved) {
         try {
@@ -234,15 +277,21 @@ function loadState() {
         }
     }
 
-    // Auto-recovery check: if state.clients is empty, scan local storage for any backup datasets
+    // Filter state.clients to strictly exclude any deleted client IDs
+    state.clients = (state.clients || []).filter(c => c && c.id && !state.deletedClientIds.has(c.id));
+
+    // Auto-recovery check: if state.clients is empty, scan local storage ONLY for valid non-deleted datasets
     if (!state.clients || state.clients.length === 0) {
         try {
             const backups = getAutoBackups();
             if (backups.length > 0 && backups[0].dataStr) {
                 const restored = JSON.parse(backups[0].dataStr);
                 if (Array.isArray(restored) && restored.length > 0) {
-                    state.clients = restored;
-                    console.log('🔄 Auto-restored data from local backup snapshot');
+                    const validRestored = restored.filter(c => c && c.id && !state.deletedClientIds.has(c.id));
+                    if (validRestored.length > 0) {
+                        state.clients = validRestored;
+                        console.log('🔄 Auto-restored non-deleted data from local backup snapshot');
+                    }
                 }
             }
         } catch (e) {}
@@ -388,22 +437,15 @@ function mergeClientData(localClients = [], remoteClients = []) {
 
     const processClient = (c) => {
         if (!c || !c.id) return;
-        const normName = normalizeClientName(c.name);
+        // Strict Tombstone Shield: Never resurrect a client that was deleted locally or remotely!
+        if (state.deletedClientIds && state.deletedClientIds.has(c.id)) return;
 
-        let existingKey = null;
-        for (let [key, existing] of mergedMap.entries()) {
-            if (existing.id === c.id || (normName && normalizeClientName(existing.name) === normName)) {
-                existingKey = key;
-                break;
-            }
-        }
-
-        if (!existingKey) {
+        if (!mergedMap.has(c.id)) {
             const clone = JSON.parse(JSON.stringify(c));
             if (!Array.isArray(clone.rows)) clone.rows = [];
             mergedMap.set(c.id, clone);
         } else {
-            const target = mergedMap.get(existingKey);
+            const target = mergedMap.get(c.id);
             if (!target.date && c.date) target.date = c.date;
 
             const existingRowMap = new Map();
@@ -413,6 +455,7 @@ function mergeClientData(localClients = [], remoteClients = []) {
                 if (!r) return;
                 if (r.id && existingRowMap.has(r.id)) {
                     const existingRow = existingRowMap.get(r.id);
+                    // Smart 3-tier field-level merge for exact same transaction card
                     if (r.item && (!existingRow.item || r.item.length > existingRow.item.length)) {
                         existingRow.item = r.item;
                     }
@@ -420,16 +463,16 @@ function mergeClientData(localClients = [], remoteClients = []) {
                     if (r.col4 !== undefined && r.col4 !== '') existingRow.col4 = r.col4;
                     if (r.col5 !== undefined && r.col5 !== '') existingRow.col5 = r.col5;
                     if (r.image) existingRow.image = r.image;
-                } else {
+                } else if (r.id) {
                     target.rows.push(JSON.parse(JSON.stringify(r)));
-                    if (r.id) existingRowMap.set(r.id, r);
+                    existingRowMap.set(r.id, r);
                 }
             });
         }
     };
 
-    (localClients || []).forEach(processClient);
-    (remoteClients || []).forEach(processClient);
+    (localClients || []).forEach(c => processClient(c));
+    (remoteClients || []).forEach(c => processClient(c));
 
     return Array.from(mergedMap.values());
 }
@@ -439,6 +482,9 @@ function saveState(notifyBroadcast = true, syncCloud = true) {
         clients: state.clients,
         firebaseConfig: state.firebaseConfig
     }));
+    if (state.deletedClientIds) {
+        localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
+    }
     createAutoBackup('Auto Save');
     updateGlobalStats();
     if (notifyBroadcast && broadcastChannel) {
@@ -462,45 +508,98 @@ function initFirebaseIfConfigured() {
             }
 
             const clientsRef = firebaseDb.ref('loss_calc/clients');
-            
-            // Initial snapshot listener with bidirectional merging & overwrite prevention
-            clientsRef.on('value', (snapshot) => {
-                const data = snapshot.val();
-                isRemoteUpdateInProgress = true;
-                
-                let remoteClients = [];
-                if (data) {
-                    remoteClients = Array.isArray(data) 
-                        ? data.filter(Boolean) 
-                        : Object.values(data);
+            const deletedRef = firebaseDb.ref('loss_calc/deleted_clients');
+            isInitialCloudLoadComplete = false;
+
+            // 1. Listen for remote tombstones continuously
+            deletedRef.on('child_added', (snapshot) => {
+                const delId = snapshot.key;
+                if (delId) {
+                    if (!state.deletedClientIds) state.deletedClientIds = new Set();
+                    if (!state.deletedClientIds.has(delId)) {
+                        state.deletedClientIds.add(delId);
+                        localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
+                        const beforeLen = state.clients.length;
+                        state.clients = state.clients.filter(c => c && c.id !== delId);
+                        if (state.clients.length !== beforeLen) {
+                            saveState(false, false);
+                            render();
+                        }
+                    }
+                }
+            });
+
+            // 2. Fetch remote tombstones once before retrieving clients
+            deletedRef.once('value').then(delSnap => {
+                const delData = delSnap.val();
+                if (delData) {
+                    Object.keys(delData).forEach(id => state.deletedClientIds.add(id));
+                    localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
                 }
 
-                // Smart bidirectional merge of local storage and cloud database
+                // 3. SAFE INITIAL FETCH LOCK: Download remote snapshot ONCE
+                return clientsRef.once('value');
+            }).then(snapshot => {
+                const data = snapshot.val();
+                let remoteClients = [];
+                if (data) {
+                    remoteClients = (Array.isArray(data) ? data.filter(Boolean) : Object.values(data))
+                        .filter(c => c && c.id && !state.deletedClientIds.has(c.id));
+                }
+
+                if (remoteClients.length > 0) {
+                    state.clients = mergeClientData(state.clients, remoteClients);
+                    saveState(false, false);
+                    render();
+                } else if (state.clients.length > 0) {
+                    syncToFirebase(true);
+                }
+
+                isInitialCloudLoadComplete = true;
+                console.log('✅ Initial cloud sync with tombstone verification completed.');
+                updateSyncBadge(true, 'Cloud Sync Active');
+            }).catch(err => {
+                console.warn('Initial cloud snapshot fetch error:', err);
+                isInitialCloudLoadComplete = true;
+            });
+
+            // 4. REAL-TIME CONTINUOUS VALUE LISTENER (with empty-override protection)
+            clientsRef.on('value', (snapshot) => {
+                if (!isInitialCloudLoadComplete || isExplicitFullPurgeInProgress) return;
+
+                const data = snapshot.val();
+                isRemoteUpdateInProgress = true;
+
+                let remoteClients = [];
+                if (data) {
+                    remoteClients = (Array.isArray(data) ? data.filter(Boolean) : Object.values(data))
+                        .filter(c => c && c.id && !state.deletedClientIds.has(c.id));
+                }
+
+                if (remoteClients.length === 0 && state.clients.length > 0 && !isExplicitFullPurgeInProgress) {
+                    console.warn('🛡️ Received empty remote snapshot while local has data. Preserving local state.');
+                    isRemoteUpdateInProgress = false;
+                    return;
+                }
+
                 const mergedClients = mergeClientData(state.clients, remoteClients);
                 const isIdentical = JSON.stringify(mergedClients) === JSON.stringify(state.clients);
-                
+
                 state.clients = mergedClients;
                 saveState(false, false);
-                
+
                 if (!isIdentical) {
                     render();
                 }
 
-                isInitialCloudLoadComplete = true;
-
-                // Push back to Cloud if local had new data that Cloud missed
-                if (JSON.stringify(mergedClients) !== JSON.stringify(remoteClients)) {
-                    syncToFirebase(true);
-                }
-
-                updateSyncBadge(true, 'Cloud Sync Active');
                 isRemoteUpdateInProgress = false;
             });
 
-            // Granular Child Changed Listener for instant single-client node updates
+            // 5. GRANULAR CHILD CHANGED LISTENER
             clientsRef.on('child_changed', (snapshot) => {
+                if (!isInitialCloudLoadComplete || isExplicitFullPurgeInProgress) return;
                 const updatedClient = snapshot.val();
-                if (updatedClient && updatedClient.id) {
+                if (updatedClient && updatedClient.id && !state.deletedClientIds.has(updatedClient.id)) {
                     isRemoteUpdateInProgress = true;
                     createAutoBackup('Before Remote Update');
                     const idx = state.clients.findIndex(c => c.id === updatedClient.id);
@@ -508,7 +607,7 @@ function initFirebaseIfConfigured() {
 
                     if (idx !== -1) {
                         const mergedClient = mergeClientData([state.clients[idx]], [updatedClient])[0];
-                        if (JSON.stringify(state.clients[idx]) !== JSON.stringify(mergedClient)) {
+                        if (mergedClient && JSON.stringify(state.clients[idx]) !== JSON.stringify(mergedClient)) {
                             state.clients[idx] = mergedClient;
                             hasChanged = true;
                         }
@@ -525,46 +624,78 @@ function initFirebaseIfConfigured() {
                 }
             });
 
-            // Instant Granular Remote Deletion Listener
+            // 6. GRANULAR CHILD REMOVED LISTENER
             clientsRef.on('child_removed', (snapshot) => {
-                if (!isInitialCloudLoadComplete) return;
+                if (!isInitialCloudLoadComplete || isExplicitFullPurgeInProgress) return;
                 const deletedKey = snapshot.key;
                 const deletedVal = snapshot.val();
                 const deletedId = deletedKey || (deletedVal && deletedVal.id);
-                
+
                 if (deletedId) {
+                    if (!state.deletedClientIds) state.deletedClientIds = new Set();
+                    state.deletedClientIds.add(deletedId);
+                    localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
+
                     const beforeCount = state.clients.length;
-                    createAutoBackup('Before Remote Deletion');
-                    state.clients = state.clients.filter(c => c.id !== deletedId);
+                    state.clients = state.clients.filter(c => c && c.id !== deletedId);
                     if (state.clients.length < beforeCount) {
                         saveState(false, false);
                         render();
-                        showToastNotification('Remote sync: Client deleted instantly from server', 'sync');
+                        showToastNotification('Remote sync: Client deleted permanently across all devices', 'sync');
                     }
                 }
             });
 
-            const cloudBadge = document.getElementById('cloud-sync-status-badge');
-            if (cloudBadge) {
-                cloudBadge.textContent = 'Active (Firebase Realtime DB)';
-                cloudBadge.className = 'telemetry-value active';
-            }
-            if (cloudSyncStatusText) {
-                cloudSyncStatusText.textContent = '☁️ Cloud Realtime DB: Connected & Synced! Multi-device changes merge and sync instantly.';
-            }
+            // 7. LISTEN FOR REAL-TIME CONNECTION STATE FROM FIREBASE
+            firebaseDb.ref('.info/connected').on('value', (snap) => {
+                const connected = snap.val() === true;
+                if (connected) {
+                    updateSyncConnectionState(true, 'Realtime Cloud Active');
+                } else {
+                    updateSyncConnectionState(false, '⚠️ Real-time synchronization connection is not established. Operating in local mode.');
+                }
+            });
+
             testFirebaseConnection();
-            updateSyncBadge(true, 'Realtime Cloud Active');
         } catch (e) {
             console.error('Firebase init error:', e);
-            updateSyncBadge(false, 'Local Mode');
+            updateSyncConnectionState(false, '⚠️ Real-time synchronization connection is not established.');
         }
     } else {
-        const cloudBadge = document.getElementById('cloud-sync-status-badge');
+        updateSyncConnectionState(false, '⚠️ Real-time synchronization connection is not established. Enter Firebase config to enable cloud sync.');
+    }
+}
+
+function updateSyncConnectionState(isEstablished, message = '') {
+    const offlineBanner = document.getElementById('sync-offline-banner');
+    const offlineBannerText = document.getElementById('sync-offline-text');
+    const cloudBadge = document.getElementById('cloud-sync-status-badge');
+
+    if (isEstablished) {
+        if (offlineBanner) offlineBanner.style.display = 'none';
+        updateSyncBadge(true, 'Realtime Sync Active');
         if (cloudBadge) {
-            cloudBadge.textContent = 'Local Standalone';
-            cloudBadge.className = 'telemetry-value';
+            cloudBadge.textContent = 'Active (Firebase Realtime DB)';
+            cloudBadge.className = 'telemetry-value active';
         }
-        updateSyncBadge(true, 'Local Realtime Active');
+        if (cloudSyncStatusText) {
+            cloudSyncStatusText.textContent = '☁️ Cloud Realtime DB: Connected & Synced! Multi-device changes sync instantly.';
+        }
+    } else {
+        if (offlineBanner) {
+            offlineBanner.style.display = 'flex';
+            if (offlineBannerText) {
+                offlineBannerText.textContent = message || '⚠️ Real-time synchronization connection is not established. Operating in local mode.';
+            }
+        }
+        updateSyncBadge(false, 'Sync Not Established');
+        if (cloudBadge) {
+            cloudBadge.textContent = 'Not Established';
+            cloudBadge.className = 'telemetry-value warning';
+        }
+        if (cloudSyncStatusText) {
+            cloudSyncStatusText.textContent = '⚠️ Cloud Realtime DB: Real-time synchronization connection is NOT established. Changes are saved in local storage only.';
+        }
     }
 }
 
@@ -574,21 +705,52 @@ function syncToFirebase(force = false) {
         console.log('⏳ Cloud sync deferred until initial remote load completes');
         return;
     }
+    if (state.clients.length === 0 && !force && !isExplicitFullPurgeInProgress) {
+        console.log('🛡️ Prevented pushing empty state to Firebase.');
+        return;
+    }
     try {
-        const clientMap = {};
+        const updates = {};
         state.clients.forEach(c => {
-            if (c && c.id) clientMap[c.id] = c;
+            if (c && c.id && (!state.deletedClientIds || !state.deletedClientIds.has(c.id))) {
+                updates[`loss_calc/clients/${c.id}`] = c;
+            }
         });
-        firebaseDb.ref('loss_calc/clients').set(clientMap);
+        if (Object.keys(updates).length > 0) {
+            firebaseDb.ref().update(updates);
+        } else if (force && isExplicitFullPurgeInProgress) {
+            firebaseDb.ref('loss_calc/clients').remove();
+        }
     } catch (e) {
         console.error('Firebase push error:', e);
     }
 }
 
-function deleteClientFromCloud(clientId) {
-    if (firebaseDb && clientId) {
+function syncSingleClientToFirebase(clientId) {
+    if (isRemoteUpdateInProgress || !firebaseDb || !isInitialCloudLoadComplete) return;
+    if (state.deletedClientIds && state.deletedClientIds.has(clientId)) return;
+    const client = state.clients.find(c => c.id === clientId);
+    if (client && client.id) {
         try {
-            firebaseDb.ref(`loss_calc/clients/${clientId}`).remove();
+            firebaseDb.ref(`loss_calc/clients/${client.id}`).set(client);
+        } catch (e) {
+            console.error('Single client sync error:', e);
+        }
+    }
+}
+
+function deleteClientFromCloud(clientId) {
+    if (!clientId) return;
+    if (!state.deletedClientIds) state.deletedClientIds = new Set();
+    state.deletedClientIds.add(clientId);
+    localStorage.setItem('lossCalcDeletedIds', JSON.stringify(Array.from(state.deletedClientIds)));
+
+    if (firebaseDb) {
+        try {
+            const updates = {};
+            updates[`loss_calc/clients/${clientId}`] = null;
+            updates[`loss_calc/deleted_clients/${clientId}`] = Date.now();
+            firebaseDb.ref().update(updates);
         } catch (e) {
             console.error('Firebase delete error:', e);
         }
@@ -624,14 +786,13 @@ function testFirebaseConnection() {
 function setupNetworkListeners() {
     window.addEventListener('online', () => {
         state.isOnline = true;
-        updateSyncBadge(true, 'Reconnected');
         showToastNotification('Network connection restored! Resyncing database...', 'sync');
         if (firebaseDb) syncToFirebase();
     });
 
     window.addEventListener('offline', () => {
         state.isOnline = false;
-        updateSyncBadge(false, 'Offline Mode');
+        updateSyncConnectionState(false, '⚠️ Network connection offline. Real-time synchronization connection is not established.');
         showToastNotification('Network offline. Changes saved in local queue.', 'danger');
     });
 }
@@ -640,7 +801,7 @@ function updateSyncBadge(online, text) {
     if (syncStatusBadge) {
         const dot = syncStatusBadge.querySelector('.status-dot');
         const txt = syncStatusBadge.querySelector('.status-text');
-        if (dot) dot.className = online ? 'status-dot online' : 'status-dot';
+        if (dot) dot.className = online ? 'status-dot online' : 'status-dot offline';
         if (txt) txt.textContent = text;
     }
 }
@@ -681,7 +842,7 @@ function handleClientNameInput() {
         clientSuggestions.innerHTML = matches.map(name => `
             <div class="suggestion-item" data-name="${name}">
                 <span>${name}</span>
-                <span class="suggestion-tag">Existing Client</span>
+                <span class="suggestion-tag">New Transaction</span>
             </div>
         `).join('');
         clientSuggestions.classList.add('active');
@@ -695,14 +856,14 @@ function handleClientNameInput() {
         clientMatchStatus.innerHTML = `
             <span class="match-badge existing">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                Matches existing client: "${existing.name}"
+                Generates a brand new, isolated transaction table for: "${existing.name}"
             </span>
         `;
     } else if (val.length > 0) {
         clientMatchStatus.innerHTML = `
             <span class="match-badge new">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                New custom client: "${val}"
+                Generates a brand new, isolated transaction table for: "${val}"
             </span>
         `;
     } else {
@@ -749,17 +910,17 @@ function setupTabNavigation() {
 // ═══════════════════════════════════════════════════
 function setupEventListeners() {
     // Mobile Navigation Toggle
-    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenuBtn = document.getElementById('mobile-menu-toggle') || document.getElementById('mobile-menu-btn');
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
 
-    if (mobileMenuBtn && sidebar && sidebarOverlay) {
+    if (mobileMenuBtn && sidebar) {
         const toggleMobileMenu = () => {
             sidebar.classList.toggle('mobile-open');
-            sidebarOverlay.classList.toggle('mobile-open');
+            if (sidebarOverlay) sidebarOverlay.classList.toggle('mobile-open');
         };
         mobileMenuBtn.addEventListener('click', toggleMobileMenu);
-        sidebarOverlay.addEventListener('click', toggleMobileMenu);
+        if (sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMobileMenu);
     }
     document.getElementById('btn-add-client').addEventListener('click', () => {
         addClientModal.classList.add('active');
@@ -796,6 +957,13 @@ function setupEventListeners() {
     clientNameInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') btnSaveClient.click();
     });
+
+    const btnBannerSyncSettings = document.getElementById('btn-banner-sync-settings');
+    if (btnBannerSyncSettings) {
+        btnBannerSyncSettings.addEventListener('click', () => {
+            if (btnSyncSettings) btnSyncSettings.click();
+        });
+    }
 
     btnSyncSettings.addEventListener('click', () => {
         syncSettingsModal.classList.add('active');
@@ -925,7 +1093,7 @@ function setupEventListeners() {
         btnDashDownloadReport.addEventListener('click', exportDashboardImage);
     }
 
-    // ── Data Deletion Tab listeners ──────────────────
+    // ── Data Deletion Tab & Security Modal listeners ──────────────────
     const delClientScope = document.getElementById('del-client-scope');
     const delSpecificWrapper = document.getElementById('del-specific-client-wrapper');
     if (delClientScope) {
@@ -960,6 +1128,49 @@ function setupEventListeners() {
         });
     }
 
+    // Security Deletion Confirmation Modal
+    const securityDeleteModal = document.getElementById('security-delete-modal');
+    const closeSecurityDeleteModal = document.getElementById('close-security-delete-modal');
+    const btnCancelSecDel = document.getElementById('btn-cancel-sec-del');
+    const btnConfirmSecDel = document.getElementById('btn-confirm-sec-del');
+    const secDelConfirmInput = document.getElementById('sec-del-confirm-input');
+
+    const closeSecModal = () => {
+        if (securityDeleteModal) securityDeleteModal.classList.remove('active');
+        if (secDelConfirmInput) secDelConfirmInput.value = '';
+        if (btnConfirmSecDel) btnConfirmSecDel.disabled = true;
+        pendingDeleteAction = null;
+    };
+
+    if (closeSecurityDeleteModal) closeSecurityDeleteModal.addEventListener('click', closeSecModal);
+    if (btnCancelSecDel) btnCancelSecDel.addEventListener('click', closeSecModal);
+    if (secDelConfirmInput) {
+        secDelConfirmInput.addEventListener('input', (e) => {
+            const val = e.target.value.trim();
+            if (btnConfirmSecDel) {
+                btnConfirmSecDel.disabled = (val !== '7722');
+            }
+        });
+        secDelConfirmInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && secDelConfirmInput.value.trim() === '7722') {
+                if (btnConfirmSecDel && !btnConfirmSecDel.disabled) {
+                    btnConfirmSecDel.click();
+                }
+            }
+        });
+    }
+    if (btnConfirmSecDel) {
+        btnConfirmSecDel.addEventListener('click', () => {
+            if (secDelConfirmInput && secDelConfirmInput.value.trim() === '7722') {
+                const action = pendingDeleteAction;
+                closeSecModal();
+                if (typeof action === 'function') {
+                    action();
+                }
+            }
+        });
+    }
+
     window.addEventListener('beforeunload', () => saveState());
     window.addEventListener('pagehide', () => saveState());
 }
@@ -970,11 +1181,11 @@ function setupEventListeners() {
 
 function createNewClient(inputName) {
     const today = new Date().toISOString().split('T')[0];
-    const existing = findExistingClient(inputName);
-    const canonicalName = existing ? existing.name : inputName;
+    const canonicalName = (inputName || '').trim();
+    if (!canonicalName) return;
 
     const newClient = {
-        id: 'client_' + Date.now().toString(),
+        id: 'client_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7),
         name: canonicalName,
         date: today,
         rows: [createEmptyRow()]
@@ -984,11 +1195,7 @@ function createNewClient(inputName) {
     saveState();
     render();
 
-    if (existing) {
-        showToastNotification(`Added record under existing client: "${canonicalName}"`);
-    } else {
-        showToastNotification(`Created new client: "${canonicalName}"`);
-    }
+    showToastNotification(`Created brand new isolated transaction table for: "${canonicalName}"`);
 }
 
 function createEmptyRow() {
@@ -1003,13 +1210,20 @@ function createEmptyRow() {
 }
 
 function deleteClient(id) {
-    if (confirm('Are you sure you want to delete this client record?')) {
-        state.clients = state.clients.filter(c => c.id !== id);
-        saveState();
-        deleteClientFromCloud(id);
-        render();
-        showToastNotification('Client record deleted across all synced devices', 'danger');
-    }
+    const client = state.clients.find(c => c.id === id);
+    if (!client) return;
+
+    requestSecureDeletion(
+        `PERMANENT DELETION: Delete client "${client.name}" and all associated transaction records & photos?`,
+        () => {
+            state.clients = state.clients.filter(c => c.id !== id);
+            if (state.selectedClientIds) state.selectedClientIds.delete(id);
+            saveState();
+            deleteClientFromCloud(id);
+            render();
+            showToastNotification(`Client "${client.name}" permanently deleted across all synced devices`, 'danger');
+        }
+    );
 }
 
 function updateClientDate(clientId, value) {
@@ -1048,18 +1262,22 @@ function addRow(clientId) {
 function deleteRow(clientId, rowId) {
     const client = state.clients.find(c => c.id === clientId);
     if (client) {
-        client.rows = client.rows.filter(r => r.id !== rowId);
-        saveState();
-        render();
+        const row = client.rows.find(r => r.id === rowId);
+        const itemName = (row && row.item && row.item.trim()) ? `"${row.item.trim()}"` : 'this row';
+        if (confirm(`Are you sure you really want to delete ${itemName}?`)) {
+            client.rows = client.rows.filter(r => r.id !== rowId);
+            saveState();
+            render();
+            showToastNotification('Row deleted successfully', 'danger');
+        }
     }
 }
 
-let syncDebounceTimer = null;
-function debouncedSyncToFirebase() {
-    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
-    syncDebounceTimer = setTimeout(() => {
-        syncToFirebase();
-    }, 400);
+function debouncedSyncSingleClient(clientId) {
+    if (singleClientSyncTimers[clientId]) clearTimeout(singleClientSyncTimers[clientId]);
+    singleClientSyncTimers[clientId] = setTimeout(() => {
+        syncSingleClientToFirebase(clientId);
+    }, 300);
 }
 
 function updateCell(clientId, rowId, field, value) {
@@ -1071,7 +1289,7 @@ function updateCell(clientId, rowId, field, value) {
             saveState(true, false);
             updateClientSummaryUI(client);
             updateGlobalStats();
-            debouncedSyncToFirebase();
+            debouncedSyncSingleClient(clientId);
         }
     }
 }
@@ -1220,24 +1438,7 @@ function updateGlobalStats() {
     }
 }
 
-function showToastNotification(message, waUrl = null) {
-    const existing = document.querySelector('.toast-notification');
-    if (existing) existing.remove();
 
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-    toast.innerHTML = `
-        <span>${message}</span>
-        ${waUrl ? `<a href="${waUrl}" target="_blank" rel="noopener noreferrer" class="toast-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-1.157 4.228 4.257-1.115z"/></svg>
-            Open WhatsApp
-        </a>` : ''}
-    `;
-    document.body.appendChild(toast);
-    setTimeout(() => {
-        if (document.body.contains(toast)) toast.remove();
-    }, 6000);
-}
 
 // ═══════════════════════════════════════════════════
 // BULK DELETION CONTROL & SELECTION ENGINE
@@ -1272,23 +1473,17 @@ function deleteSelectedClients() {
     const idsToDelete = Array.from(state.selectedClientIds);
     const count = idsToDelete.length;
 
-    if (confirm(`Are you sure you want to delete ${count} selected client record(s)? This will delete them across all connected devices and cannot be undone.`)) {
-        // 1. Remove from Cloud DB instantly for each ID
-        idsToDelete.forEach(id => deleteClientFromCloud(id));
-
-        // 2. Remove from Local State
-        state.clients = state.clients.filter(c => !state.selectedClientIds.has(c.id));
-        state.selectedClientIds.clear();
-
-        // 3. Save State & Broadcast Tab Sync
-        saveState();
-
-        // 4. Update Display automatically to show only remaining entries
-        render();
-
-        // 5. Toast notification
-        showToastNotification(`Deleted ${count} client entry/entries across all synced devices!`, 'danger');
-    }
+    requestSecureDeletion(
+        `PERMANENT DELETION: You are about to permanently delete ${count} selected client record(s) and all attached data across all synced devices.`,
+        () => {
+            idsToDelete.forEach(id => deleteClientFromCloud(id));
+            state.clients = state.clients.filter(c => !state.selectedClientIds.has(c.id));
+            state.selectedClientIds.clear();
+            saveState();
+            render();
+            showToastNotification(`Deleted ${count} client entry/entries across all synced devices!`, 'danger');
+        }
+    );
 }
 
 // ═══════════════════════════════════════════════════
@@ -1351,14 +1546,14 @@ function renderDeletionTab() {
     if (scope === 'SPECIFIC') populateDelClientDropdown();
 
     if (!delFilterApplied) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="del-empty-msg">Select a date range and client scope, then click <strong>Apply</strong> to preview targeted records.</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="del-empty-msg">Select target scope and filters, then click <strong>Apply</strong> to preview targeted records.</td></tr>`;
         if (counter) counter.textContent = 'Rows: 0 of 0';
         if (selCount) selCount.textContent = '0 records selected';
         if (btnExec) btnExec.disabled = true;
         return;
     }
 
-    // Build matching rows
+    // Build matching rows for Single Person (SPECIFIC) or Date Range (ALL)
     const rows = [];
     let seq = 1001;
     state.clients.forEach(c => {
@@ -1366,7 +1561,7 @@ function renderDeletionTab() {
         if (toDate   && c.date > toDate)   return;
         if (scope === 'SPECIFIC' && specific &&
             normalizeClientName(c.name) !== normalizeClientName(specific)) return;
-        c.rows.forEach(r => {
+        (c.rows || []).forEach(r => {
             rows.push({ seq: seq++, clientId: c.id, rowId: r.id,
                 clientName: c.name, date: c.date,
                 type: r.image ? 'Image' : 'Order',
@@ -1411,23 +1606,48 @@ function executePermanentDeletion() {
     const checked = document.querySelectorAll('.del-row-chk:checked');
     if (checked.length === 0) return;
 
+    const rowIds = new Set();
+    checked.forEach(c => rowIds.add(c.dataset.rowId));
+
+    requestSecureDeletion(
+        `PERMANENT DELETION: You are about to permanently delete ${rowIds.size} targeted record(s) and attached images across all connected devices and cloud database.`,
+        () => performSecuredDeletionExecution()
+    );
+}
+
+function performSecuredDeletionExecution() {
+    const checked = document.querySelectorAll('.del-row-chk:checked');
+    if (checked.length === 0) return;
+
     const clientIds = new Set();
     const rowIds = new Set();
     checked.forEach(c => { clientIds.add(c.dataset.clientId); rowIds.add(c.dataset.rowId); });
 
-    if (!confirm(`PERMANENT DELETION\n\nDelete ${rowIds.size} record(s) and their images?\n\nThis action is IRREVERSIBLE and will sync across all devices.`)) return;
+    createAutoBackup('Before Selective Deletion');
 
     state.clients.forEach(c => {
-        if (clientIds.has(c.id)) c.rows = c.rows.filter(r => !rowIds.has(r.id));
+        if (clientIds.has(c.id)) {
+            c.rows = c.rows.filter(r => !rowIds.has(r.id));
+        }
     });
+
     const emptyIds = state.clients.filter(c => c.rows.length === 0).map(c => c.id);
     state.clients = state.clients.filter(c => c.rows.length > 0);
+
+    // Delete empty client nodes from cloud
     emptyIds.forEach(id => deleteClientFromCloud(id));
+
+    // Also update remaining modified client nodes in cloud
+    state.clients.forEach(c => {
+        if (clientIds.has(c.id)) {
+            syncSingleClientToFirebase(c.id);
+        }
+    });
 
     delFilterApplied = false;
     saveState();
     render();
-    showToastNotification(`Permanently deleted ${rowIds.size} record(s)!`, 'danger');
+    showToastNotification(`Permanently deleted ${rowIds.size} record(s) across all devices!`, 'danger');
 }
 
 function renderWorkspace() {
@@ -1786,9 +2006,9 @@ function renderDashboard() {
 }
 
 function exportDashboardImage() {
-    const fromDate = dashFromDate.value;
-    const toDate = dashToDate.value;
-    const selectedClientName = dashClientSelect.value;
+    const fromDate = dashFromDate ? dashFromDate.value : '';
+    const toDate = dashToDate ? dashToDate.value : '';
+    const selectedClientName = dashClientSelect ? dashClientSelect.value : 'ALL';
     const normSelectedClient = normalizeClientName(selectedClientName);
 
     let matchingClients = state.clients.filter(c => {
@@ -1806,36 +2026,17 @@ function exportDashboardImage() {
     let totalRecdSum = 0;
     let totalLossSum = 0;
 
-    const masterRows = [];
-
     matchingClients.forEach(c => {
         const summary = calculateSummary(c);
-
         totalCol2Sum += summary.totalCol3;
         totalCol3Sum += summary.totalCol4;
         totalCol4Sum += summary.totalCol5;
         totalRecdSum += summary.recdCol4;
         totalLossSum += summary.lossCol3;
-
-        c.rows.forEach(r => {
-            masterRows.push({
-                date: c.date || '',
-                clientName: c.name || '',
-                item: r.item || '',
-                image: r.image || '',
-                col2: parseFloat(r.col3) || 0,
-                col3: parseFloat(r.col4) || 0,
-                col4: parseFloat(r.col5) || 0,
-                recd: (parseFloat(r.col3) || 0) + (parseFloat(r.col4) || 0)
-            });
-        });
     });
 
     const CARD_BG        = '#ffffff';
-    const HEADER_BG      = 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)';
     const TEXT_PRIMARY   = '#0f172a';
-    const TEXT_MUTED     = '#64748b';
-    const BORDER         = '#e2e8f0';
     const BLUE           = '#2563eb';
     const GREEN          = '#059669';
     const RED            = '#dc2626';
@@ -1847,9 +2048,11 @@ function exportDashboardImage() {
         dateStyle: 'medium',
         timeStyle: 'short'
     });
+    
     const dateRangeStr = (fromDate && toDate)
-        ? `${formatFullDate(fromDate)} to ${formatFullDate(toDate)}`
-        : (fromDate ? `From ${formatFullDate(fromDate)}` : (toDate ? `Up to ${formatFullDate(toDate)}` : 'All Dates'));
+        ? `${formatFullDate(fromDate)}   ➔   ${formatFullDate(toDate)}`
+        : (fromDate ? `From ${formatFullDate(fromDate)}` : (toDate ? `Up to ${formatFullDate(toDate)}` : 'All Dates Recorded'));
+        
     const clientFilterStr = selectedClientName === 'ALL' ? 'All Clients' : selectedClientName;
 
     const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1858,105 +2061,75 @@ function exportDashboardImage() {
         return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
-    const rowsHtml = masterRows.length === 0 
-        ? `<tr><td colspan="8" style="padding:20px; text-align:center; color:${TEXT_MUTED}; font-size:14px;">No items match selected date range or filter.</td></tr>`
-        : masterRows.map(r => {
-            const photoHtml = r.image 
-                ? `<img src="${r.image}" style="width:48px; height:48px; border-radius:6px; object-fit:cover; border:1px solid ${BORDER}; display:block; margin:0 auto;">`
-                : `<span style="color:${TEXT_MUTED}; font-size:12px; font-style:italic;">No photo</span>`;
-
-            return `<tr>
-                <td style="padding:10px 12px; border-bottom:1px solid ${BORDER}; font-family:${FONT_MONO}; font-weight:700; font-size:13px; text-align:center; color:${TEXT_PRIMARY};">${esc(formatFullDate(r.date))}</td>
-                <td style="padding:10px 12px; border-bottom:1px solid ${BORDER}; font-weight:800; font-size:14px; color:#6d28d9;">${esc(r.clientName)}</td>
-                <td style="padding:8px 12px; border-bottom:1px solid ${BORDER}; text-align:center; width:64px;">${photoHtml}</td>
-                <td style="padding:10px 12px; border-bottom:1px solid ${BORDER}; font-weight:700; font-size:14px; color:${TEXT_PRIMARY}; word-break:break-word;">${esc(r.item)}</td>
-                <td style="padding:10px 12px; border-bottom:1px solid ${BORDER}; font-family:${FONT_MONO}; font-weight:800; font-size:14px; text-align:right; color:${BLUE}; background:#f0f9ff;">${fmtCurrency(r.col2)}</td>
-                <td style="padding:10px 12px; border-bottom:1px solid ${BORDER}; font-family:${FONT_MONO}; font-weight:800; font-size:14px; text-align:right; color:${GREEN}; background:#ecfdf5;">${fmtCurrency(r.col3)}</td>
-                <td style="padding:10px 12px; border-bottom:1px solid ${BORDER}; font-family:${FONT_MONO}; font-weight:800; font-size:14px; text-align:right; color:${RED}; background:#fff1f2;">${fmtCurrency(r.col4)}</td>
-                <td style="padding:10px 12px; border-bottom:1px solid ${BORDER}; font-family:${FONT_MONO}; font-weight:800; font-size:14px; text-align:right; color:${GREEN}; background:#ecfdf5;">${fmtCurrency(r.recd)}</td>
-            </tr>`;
-        }).join('');
-
     const snap = document.createElement('div');
     snap.style.cssText = [
         'position:fixed', 'left:-9999px', 'top:0',
-        'width:1050px',
+        'width:650px',
         `background:${CARD_BG}`,
-        'border-radius:16px',
+        'border-radius:14px',
         'overflow:hidden',
         `font-family:${FONT_UI}`,
         `color:${TEXT_PRIMARY}`,
         'box-sizing:border-box',
-        'line-height:1.5',
-        'border:2px solid #cbd5e1',
+        'line-height:1.4',
+        'border:1.5px solid #cbd5e1',
+        'box-shadow:0 12px 28px rgba(0,0,0,0.1)',
         'padding:0',
     ].join(';');
 
     snap.innerHTML = `
-        <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color:#ffffff; padding:24px 28px; border-radius:14px 14px 0 0;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:14px; margin-bottom:14px;">
+        <!-- TOP HEADER BLOCK -->
+        <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color:#ffffff; padding:18px 20px; border-radius:12px 12px 0 0;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <div>
-                    <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.12em; color:#a5b4fc;">Dashboard & Analytics Summary</div>
-                    <h2 style="margin:4px 0 0 0; font-size:26px; font-weight:800; letter-spacing:-0.5px; color:#ffffff;">${esc(clientFilterStr)}</h2>
+                    <div style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.12em; color:#a5b4fc; margin-bottom:4px;">Client Report</div>
+                    <h1 style="margin:0; font-size:22px; font-weight:800; letter-spacing:-0.4px; color:#ffffff;">${esc(clientFilterStr)}</h1>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-family:${FONT_MONO}; font-size:12px; font-weight:700; color:#e0e7ff; background:rgba(255,255,255,0.15); padding:6px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.25); margin-bottom:6px;">
-                        Report Exported: ${esc(exportDateStr)}
-                    </div>
-                    <div style="font-family:${FONT_MONO}; font-size:12px; font-weight:700; color:#cbd5e1;">
-                        Date Range: ${esc(dateRangeStr)}
+                    <div style="font-family:${FONT_MONO}; font-size:11px; font-weight:700; color:#ffffff; background:rgba(255,255,255,0.16); padding:6px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.25);">
+                        Export Date: ${esc(exportDateStr)}
                     </div>
                 </div>
             </div>
-            <div style="display:flex; gap:24px; font-size:14px; font-weight:700;">
-                <div><span style="opacity:0.8;">Client Filter:</span> ${esc(clientFilterStr)}</div>
-                <div><span style="opacity:0.8;">Date Range:</span> ${esc(dateRangeStr)}</div>
-                <div><span style="opacity:0.8;">Total Items:</span> ${masterRows.length}</div>
+
+            <!-- DATE RANGE WITH CLEAR SPACING -->
+            <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.18); display:flex; align-items:center; gap:10px; font-size:12px; font-weight:700;">
+                <span style="color:#a5b4fc; text-transform:uppercase; font-size:10px; letter-spacing:0.08em; font-weight:800;">Date Range:</span>
+                <span style="font-family:${FONT_MONO}; background:rgba(255,255,255,0.12); padding:4px 10px; border-radius:5px; color:#ffffff; letter-spacing:0.01em;">
+                    ${esc(dateRangeStr)}
+                </span>
             </div>
         </div>
 
-        <div style="padding:24px 28px;">
-            <h3 style="margin:0 0 14px 0; font-size:16px; font-weight:800; color:#6d28d9; text-transform:uppercase; letter-spacing:0.05em;">Metrics Summary</h3>
-            <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; margin-bottom:24px;">
-                <div style="background:#f0f9ff; border:1.5px solid #93c5fd; border-radius:10px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:800; color:#1d4ed8; text-transform:uppercase;">Total Col 2</div>
-                    <div style="font-family:${FONT_MONO}; font-size:20px; font-weight:800; color:${BLUE}; margin-top:4px;">${fmtCurrency(totalCol2Sum)}</div>
+        <!-- METRIC SUMMARY BLOCK (BOTTOM) -->
+        <div style="padding:18px 20px; background:#f8fafc;">
+            <h3 style="margin:0 0 12px 0; font-size:13px; font-weight:800; color:#6d28d9; text-transform:uppercase; letter-spacing:0.06em;">Metric Summary</h3>
+            
+            <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:8px;">
+                <div style="background:#ffffff; border:1.5px solid #93c5fd; border-radius:8px; padding:10px 8px; text-align:center;">
+                    <div style="font-size:9.5px; font-weight:800; color:#1d4ed8; text-transform:uppercase; letter-spacing:0.03em;">Total Col 2</div>
+                    <div style="font-family:${FONT_MONO}; font-size:14px; font-weight:800; color:${BLUE}; margin-top:4px;">${fmtCurrency(totalCol2Sum)}</div>
                 </div>
-                <div style="background:#ecfdf5; border:1.5px solid #6ee7b7; border-radius:10px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:800; color:#047857; text-transform:uppercase;">Total Col 3</div>
-                    <div style="font-family:${FONT_MONO}; font-size:20px; font-weight:800; color:${GREEN}; margin-top:4px;">${fmtCurrency(totalCol3Sum)}</div>
-                </div>
-                <div style="background:#fff1f2; border:1.5px solid #fca5a5; border-radius:10px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:800; color:#b91c1c; text-transform:uppercase;">Total Col 4</div>
-                    <div style="font-family:${FONT_MONO}; font-size:20px; font-weight:800; color:${RED}; margin-top:4px;">${fmtCurrency(totalCol4Sum)}</div>
-                </div>
-                <div style="background:#ecfdf5; border:2px solid #10b981; border-radius:10px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:800; color:#047857; text-transform:uppercase;">Total RECDS</div>
-                    <div style="font-family:${FONT_MONO}; font-size:20px; font-weight:800; color:${GREEN}; margin-top:4px;">${fmtCurrency(totalRecdSum)}</div>
-                </div>
-                <div style="background:#fffbe6; border:2px solid #f59e0b; border-radius:10px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:800; color:#b45309; text-transform:uppercase;">Total LOSS</div>
-                    <div style="font-family:${FONT_MONO}; font-size:20px; font-weight:800; color:${GOLD}; margin-top:4px;">${fmtCurrency(totalLossSum)}</div>
-                </div>
-            </div>
 
-            <h3 style="margin:0 0 14px 0; font-size:16px; font-weight:800; color:#6d28d9; text-transform:uppercase; letter-spacing:0.05em;">Master Data Sheet</h3>
-            <div style="border:1.5px solid ${BORDER}; border-radius:10px; overflow:hidden;">
-                <table style="width:100%; border-collapse:collapse; background:#ffffff;">
-                    <thead>
-                        <tr style="background:#f8fafc;">
-                            <th style="padding:10px 12px; font-size:12px; font-weight:800; color:${TEXT_MUTED}; text-transform:uppercase; border-bottom:2px solid ${BORDER}; text-align:left; width:12%;">Date</th>
-                            <th style="padding:10px 12px; font-size:12px; font-weight:800; color:${TEXT_MUTED}; text-transform:uppercase; border-bottom:2px solid ${BORDER}; text-align:left; width:15%;">Client</th>
-                            <th style="padding:10px 12px; font-size:12px; font-weight:800; color:${TEXT_MUTED}; text-transform:uppercase; border-bottom:2px solid ${BORDER}; text-align:center; width:64px;">Photo</th>
-                            <th style="padding:10px 12px; font-size:12px; font-weight:800; color:${TEXT_MUTED}; text-transform:uppercase; border-bottom:2px solid ${BORDER}; text-align:left;">Full Item Name</th>
-                            <th style="padding:10px 12px; font-size:12px; font-weight:800; color:${BLUE}; text-transform:uppercase; border-bottom:2px solid ${BORDER}; text-align:right; width:10%;">Col 2</th>
-                            <th style="padding:10px 12px; font-size:12px; font-weight:800; color:${GREEN}; text-transform:uppercase; border-bottom:2px solid ${BORDER}; text-align:right; width:10%;">Col 3</th>
-                            <th style="padding:10px 12px; font-size:12px; font-weight:800; color:${RED}; text-transform:uppercase; border-bottom:2px solid ${BORDER}; text-align:right; width:10%;">Col 4</th>
-                            <th style="padding:10px 12px; font-size:12px; font-weight:800; color:${GREEN}; text-transform:uppercase; border-bottom:2px solid ${BORDER}; text-align:right; width:10%;">RECD</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rowsHtml}</tbody>
-                </table>
+                <div style="background:#ffffff; border:1.5px solid #6ee7b7; border-radius:8px; padding:10px 8px; text-align:center;">
+                    <div style="font-size:9.5px; font-weight:800; color:#047857; text-transform:uppercase; letter-spacing:0.03em;">Total Col 3</div>
+                    <div style="font-family:${FONT_MONO}; font-size:14px; font-weight:800; color:${GREEN}; margin-top:4px;">${fmtCurrency(totalCol3Sum)}</div>
+                </div>
+
+                <div style="background:#ffffff; border:1.5px solid #fca5a5; border-radius:8px; padding:10px 8px; text-align:center;">
+                    <div style="font-size:9.5px; font-weight:800; color:#b91c1c; text-transform:uppercase; letter-spacing:0.03em;">Total Col 4</div>
+                    <div style="font-family:${FONT_MONO}; font-size:14px; font-weight:800; color:${RED}; margin-top:4px;">${fmtCurrency(totalCol4Sum)}</div>
+                </div>
+
+                <div style="background:#ffffff; border:1.5px solid #10b981; border-radius:8px; padding:10px 8px; text-align:center;">
+                    <div style="font-size:9.5px; font-weight:800; color:#047857; text-transform:uppercase; letter-spacing:0.03em;">Total RECDS</div>
+                    <div style="font-family:${FONT_MONO}; font-size:14px; font-weight:800; color:${GREEN}; margin-top:4px;">${fmtCurrency(totalRecdSum)}</div>
+                </div>
+
+                <div style="background:#ffffff; border:1.5px solid #f59e0b; border-radius:8px; padding:10px 8px; text-align:center;">
+                    <div style="font-size:9.5px; font-weight:800; color:#b45309; text-transform:uppercase; letter-spacing:0.03em;">Total LOSS</div>
+                    <div style="font-family:${FONT_MONO}; font-size:14px; font-weight:800; color:${GOLD}; margin-top:4px;">${fmtCurrency(totalLossSum)}</div>
+                </div>
             </div>
         </div>
     `;
@@ -1966,14 +2139,14 @@ function exportDashboardImage() {
     const doCapture = () => {
         const captureH = snap.scrollHeight;
         html2canvas(snap, {
-            scale: 3,
+            scale: 2,
             backgroundColor: CARD_BG,
             useCORS: true,
             allowTaint: true,
             logging: false,
-            width: 1050,
+            width: 650,
             height: captureH,
-            windowWidth: 1050,
+            windowWidth: 650,
             windowHeight: captureH,
             scrollX: 0,
             scrollY: 0,
@@ -1992,7 +2165,7 @@ function exportDashboardImage() {
             link.click();
             document.body.removeChild(link);
 
-            showToastNotification(`Dashboard Report image downloaded: ${fileName}`);
+            showToastNotification(`Clean Report image downloaded: ${fileName}`);
         }).catch(err => {
             if (document.body.contains(snap)) document.body.removeChild(snap);
             console.error('Report image export failed:', err);
@@ -2045,15 +2218,15 @@ function exportImage(client, cardElement, openWhatsApp = false) {
     };
 
     const rowsHtml = client.rows.map((row) => {
-        const cell = `padding:12px 14px; border-bottom:1.5px solid ${BORDER}; font-size:14px; vertical-align:middle; font-weight:700; word-break:break-word;`;
-        const mono = `${cell} font-family:${FONT_MONO}; text-align:right; font-weight:800; font-size:15px;`;
+        const cell = `padding:8px 10px; border-bottom:1px solid ${BORDER}; font-size:12px; vertical-align:middle; font-weight:700; word-break:break-word;`;
+        const mono = `${cell} font-family:${FONT_MONO}; text-align:right; font-weight:800; font-size:13px;`;
 
         const photoCellHtml = row.image
-            ? `<img src="${row.image}" style="width:54px; height:54px; border-radius:8px; object-fit:cover; border:1.5px solid ${BORDER}; display:block; margin:0 auto;">`
+            ? `<img src="${row.image}" style="width:40px; height:40px; border-radius:6px; object-fit:cover; border:1px solid ${BORDER}; display:block; margin:0 auto;">`
             : '';
 
         return `<tr>
-            <td style="padding:10px; border-bottom:1.5px solid ${BORDER}; text-align:center; width:80px;">${photoCellHtml}</td>
+            <td style="padding:6px; border-bottom:1px solid ${BORDER}; text-align:center; width:54px;">${photoCellHtml}</td>
             <td style="${cell} color:${TEXT_PRIMARY}; font-weight:800;">${esc(row.item)}</td>
             <td style="${mono} background:#f0f9ff; color:${BLUE};">${fmtCell(row.col3)}</td>
             <td style="${mono} background:#ecfdf5; color:${GREEN};">${fmtCell(row.col4)}</td>
@@ -2062,35 +2235,35 @@ function exportImage(client, cardElement, openWhatsApp = false) {
     }).join('');
 
     const thStyle = (color = TEXT_SEC, align = 'left') =>
-        `style="padding:10px 14px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:${color}; text-align:${align}; border-bottom:2px solid ${BORDER};"`;
+        `style="padding:8px 10px; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:${color}; text-align:${align}; border-bottom:1.5px solid ${BORDER};"`;
 
     const snap = document.createElement('div');
     snap.style.cssText = [
         'position:fixed', 'left:-9999px', 'top:0',
-        'width:950px',
+        'width:600px',
         `background:${CARD_BG}`,
-        'border-radius:20px',
+        'border-radius:14px',
         'overflow:hidden',
         `font-family:${FONT_UI}`,
         `color:${TEXT_PRIMARY}`,
         'box-sizing:border-box',
-        'line-height:1.5',
-        'border:2px solid #cbd5e1',
+        'line-height:1.4',
+        'border:1.5px solid #cbd5e1',
     ].join(';');
 
     snap.innerHTML = `
         <!-- Top Header Banner with Client Name, Export Date, and Date Range -->
-        <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color:#ffffff; padding:24px 28px; border-radius:18px 18px 0 0;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid rgba(255,255,255,0.18); padding-bottom:16px; margin-bottom:16px;">
+        <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color:#ffffff; padding:16px 20px; border-radius:12px 12px 0 0;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid rgba(255,255,255,0.18); padding-bottom:10px; margin-bottom:10px;">
                 <div>
-                    <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; color:#c7d2fe;">Client Calculation Result Statement</div>
-                    <h2 style="margin:4px 0 0 0; font-size:28px; font-weight:800; letter-spacing:-0.5px; color:#ffffff;">${esc(client.name)}</h2>
+                    <div style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#c7d2fe;">Client Calculation Result Statement</div>
+                    <h2 style="margin:3px 0 0 0; font-size:20px; font-weight:800; letter-spacing:-0.4px; color:#ffffff;">${esc(client.name)}</h2>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-family:${FONT_MONO}; font-size:12px; font-weight:700; color:#e0e7ff; background:rgba(255,255,255,0.15); padding:6px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.25); margin-bottom:6px;">
+                    <div style="font-family:${FONT_MONO}; font-size:10.5px; font-weight:700; color:#e0e7ff; background:rgba(255,255,255,0.15); padding:4px 9px; border-radius:6px; border:1px solid rgba(255,255,255,0.25); margin-bottom:4px;">
                         Report Exported: ${esc(exportDateStr)}
                     </div>
-                    <div style="font-family:${FONT_MONO}; font-size:12px; font-weight:700; color:#cbd5e1;">
+                    <div style="font-family:${FONT_MONO}; font-size:10.5px; font-weight:700; color:#cbd5e1;">
                         Date Range: ${esc(dateRangeStr)}
                     </div>
                 </div>
@@ -2098,39 +2271,39 @@ function exportImage(client, cardElement, openWhatsApp = false) {
 
             <!-- Metric Summary Section -->
             <div>
-                <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:#a5b4fc; margin-bottom:10px;">Metric Summary</div>
-                <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px;">
-                    <div style="background:#ffffff; border-radius:10px; padding:10px 12px; color:#0f172a; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                        <div style="font-size:11px; font-weight:800; color:#2563eb; text-transform:uppercase;">Total Col 2</div>
-                        <div style="font-family:${FONT_MONO}; font-size:17px; font-weight:800; color:${BLUE}; margin-top:2px;">${formatCurrency(summary.totalCol3)}</div>
+                <div style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:#a5b4fc; margin-bottom:6px;">Metric Summary</div>
+                <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:6px;">
+                    <div style="background:#ffffff; border-radius:6px; padding:6px 8px; color:#0f172a; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                        <div style="font-size:9px; font-weight:800; color:#2563eb; text-transform:uppercase;">Total Col 2</div>
+                        <div style="font-family:${FONT_MONO}; font-size:13.5px; font-weight:800; color:${BLUE}; margin-top:2px;">${formatCurrency(summary.totalCol3)}</div>
                     </div>
-                    <div style="background:#ffffff; border-radius:10px; padding:10px 12px; color:#0f172a; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                        <div style="font-size:11px; font-weight:800; color:#059669; text-transform:uppercase;">Total Col 3</div>
-                        <div style="font-family:${FONT_MONO}; font-size:17px; font-weight:800; color:${GREEN}; margin-top:2px;">${formatCurrency(summary.totalCol4)}</div>
+                    <div style="background:#ffffff; border-radius:6px; padding:6px 8px; color:#0f172a; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                        <div style="font-size:9px; font-weight:800; color:#059669; text-transform:uppercase;">Total Col 3</div>
+                        <div style="font-family:${FONT_MONO}; font-size:13.5px; font-weight:800; color:${GREEN}; margin-top:2px;">${formatCurrency(summary.totalCol4)}</div>
                     </div>
-                    <div style="background:#ffffff; border-radius:10px; padding:10px 12px; color:#0f172a; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                        <div style="font-size:11px; font-weight:800; color:#dc2626; text-transform:uppercase;">Total Col 4</div>
-                        <div style="font-family:${FONT_MONO}; font-size:17px; font-weight:800; color:${RED}; margin-top:2px;">${formatCurrency(summary.totalCol5)}</div>
+                    <div style="background:#ffffff; border-radius:6px; padding:6px 8px; color:#0f172a; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                        <div style="font-size:9px; font-weight:800; color:#dc2626; text-transform:uppercase;">Total Col 4</div>
+                        <div style="font-family:${FONT_MONO}; font-size:13.5px; font-weight:800; color:${RED}; margin-top:2px;">${formatCurrency(summary.totalCol5)}</div>
                     </div>
-                    <div style="background:#ffffff; border-radius:10px; padding:10px 12px; color:#0f172a; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                        <div style="font-size:11px; font-weight:800; color:#059669; text-transform:uppercase;">Total RECD</div>
-                        <div style="font-family:${FONT_MONO}; font-size:17px; font-weight:800; color:${GREEN}; margin-top:2px;">${formatCurrency(summary.recdCol4)}</div>
+                    <div style="background:#ffffff; border-radius:6px; padding:6px 8px; color:#0f172a; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                        <div style="font-size:9px; font-weight:800; color:#059669; text-transform:uppercase;">Total RECD</div>
+                        <div style="font-family:${FONT_MONO}; font-size:13.5px; font-weight:800; color:${GREEN}; margin-top:2px;">${formatCurrency(summary.recdCol4)}</div>
                     </div>
-                    <div style="background:#ffffff; border-radius:10px; padding:10px 12px; color:#0f172a; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                        <div style="font-size:11px; font-weight:800; color:#d97706; text-transform:uppercase;">Total LOSS</div>
-                        <div style="font-family:${FONT_MONO}; font-size:17px; font-weight:800; color:#b45309; margin-top:2px;">${formatCurrency(summary.lossCol3)}</div>
+                    <div style="background:#ffffff; border-radius:6px; padding:6px 8px; color:#0f172a; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                        <div style="font-size:9px; font-weight:800; color:#d97706; text-transform:uppercase;">Total LOSS</div>
+                        <div style="font-family:${FONT_MONO}; font-size:13.5px; font-weight:800; color:#b45309; margin-top:2px;">${formatCurrency(summary.lossCol3)}</div>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Detailed Items Table -->
-        <div style="padding:20px 24px; overflow:visible;">
-            <h3 style="margin:0 0 12px 0; font-size:15px; font-weight:800; color:${VIOLET}; text-transform:uppercase; letter-spacing:0.05em;">Detailed Record Items</h3>
-            <div style="border:1.5px solid ${BORDER}; border-radius:10px; overflow:hidden;">
+        <div style="padding:14px 18px; overflow:visible;">
+            <h3 style="margin:0 0 8px 0; font-size:12.5px; font-weight:800; color:${VIOLET}; text-transform:uppercase; letter-spacing:0.04em;">Detailed Record Items</h3>
+            <div style="border:1px solid ${BORDER}; border-radius:8px; overflow:hidden;">
                 <table style="width:100%; border-collapse:collapse; table-layout:fixed; background:#ffffff;">
                     <colgroup>
-                        <col style="width:80px">
+                        <col style="width:54px">
                         <col style="width:42%">
                         <col style="width:18%"> <col style="width:18%"> <col style="width:22%">
                     </colgroup>
@@ -2149,12 +2322,12 @@ function exportImage(client, cardElement, openWhatsApp = false) {
         </div>
 
         <!-- Summary Footer Row -->
-        <div style="background:#f8fafc; border-top:2px solid ${BORDER}; padding:16px 24px;">
+        <div style="background:#f8fafc; border-top:1.5px solid ${BORDER}; padding:12px 18px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div style="font-size:13px; font-weight:700; color:${TEXT_SEC};">
-                    Client: <span style="color:${VIOLET}; font-weight:800;">${esc(client.name)}</span> | Total Rows: <span style="font-weight:800;">${client.rows.length}</span>
+                <div style="font-size:11.5px; font-weight:700; color:${TEXT_SEC};">
+                    Client: <span style="color:${VIOLET}; font-weight:800;">${esc(client.name)}</span> | Rows: <span style="font-weight:800;">${client.rows.length}</span>
                 </div>
-                <div style="display:flex; gap:20px; font-family:${FONT_MONO}; font-weight:800; font-size:15px;">
+                <div style="display:flex; gap:14px; font-family:${FONT_MONO}; font-weight:800; font-size:12.5px;">
                     <div>RECD (Col 2 + Col 3): <span style="color:${GREEN};">${formatCurrency(summary.recdCol4)}</span></div>
                     <div>RECD Col 4: <span style="color:${RED};">${formatCurrency(summary.recdCol5)}</span></div>
                     <div>LOSS: <span style="color:${PINK_LOSS};">${formatCurrency(summary.lossCol3)}</span></div>
@@ -2167,14 +2340,14 @@ function exportImage(client, cardElement, openWhatsApp = false) {
     const doCapture = () => {
         const captureH = snap.scrollHeight;
         html2canvas(snap, {
-            scale: 3,
+            scale: 2,
             backgroundColor: CARD_BG,
             useCORS: true,
             allowTaint: true,
             logging: false,
-            width: 950,
+            width: 600,
             height: captureH,
-            windowWidth: 950,
+            windowWidth: 600,
             windowHeight: captureH,
             scrollX: 0,
             scrollY: 0,

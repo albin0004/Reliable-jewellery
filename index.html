@@ -159,6 +159,7 @@
 
     <script>
         document.getElementById('logout-btn')?.addEventListener('click', () => {
+            localStorage.removeItem('rj_user_approved');
             auth.signOut().then(() => window.location.reload());
         });
     </script>
@@ -167,18 +168,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
-                    .then(registration => {
-                        registration.update();
-                        document.addEventListener('visibilitychange', () => {
-                            if (document.visibilityState === 'visible') registration.update();
-                        });
-                    })
                     .catch(err => console.log('ServiceWorker registration failed: ', err));
-
-                let refreshing = false;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (!refreshing) { refreshing = true; window.location.reload(); }
-                });
             });
         }
     </script>

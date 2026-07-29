@@ -12,13 +12,18 @@ function getRootPath() {
     return isSubfolder ? '../' : './';
 }
 
-// 1. Cloak the body immediately to prevent screen flashing
+// 1. Cloak the body immediately to prevent screen flashing (skip if cached as approved)
 (function() {
     const path = window.location.pathname;
     if (path.includes('login.html') || path.includes('access-denied.html') || window.location.protocol === 'file:') {
         return; // Skip login, access denied, and local file:// pages
     }
     
+    // Check if user was previously approved and cached locally
+    if (localStorage.getItem('rj_user_approved') === 'true') {
+        return; // Skip cloaking for cached approved users so categories load instantly
+    }
+
     const style = document.createElement('style');
     style.id = 'auth-cloak';
     style.innerHTML = 'body { display: none !important; }';
@@ -42,9 +47,13 @@ window.addEventListener('DOMContentLoaded', () => {
     firebase.auth().onAuthStateChanged(async (user) => {
         if (!user) {
             console.log("Auth Shield: User not logged in, redirecting...");
+            localStorage.removeItem('rj_user_approved');
             redirectToLogin();
             return;
         }
+
+        // Uncloak immediately when authenticated session is confirmed
+        removeCloak();
 
         try {
             const email = user.email.toLowerCase();
@@ -55,9 +64,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
             if (doc.exists) {
                 console.log(`Auth Shield: User ${email} approved.`);
-                removeCloak();
+                localStorage.setItem('rj_user_approved', 'true');
             } else {
                 console.warn(`Auth Shield: User ${email} is not approved.`);
+                localStorage.removeItem('rj_user_approved');
                 redirectToAccessDenied(user.email);
             }
         } catch (error) {
@@ -68,8 +78,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 console.warn("Auth Shield: Offline mode. Permitting access for cached session.");
                 removeCloak();
             } else {
-                // Deny access if online but verification failed (e.g. Permission Denied)
-                redirectToAccessDenied(user.email);
+                if (localStorage.getItem('rj_user_approved') !== 'true') {
+                    redirectToAccessDenied(user.email);
+                }
             }
         }
     });
