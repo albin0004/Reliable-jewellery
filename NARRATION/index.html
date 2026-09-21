@@ -17,11 +17,13 @@
   <!-- html2canvas for Image Export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-  <!-- Firebase SDKs -->
+  <!-- Firebase SDKs (Realtime DB & Auth) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+  <!-- Supabase Realtime SDK for Multi-Device Subscriptions -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Shared Firebase Config & Auth Shield Middleware -->
   <script src="../firebase-config.js"></script>
@@ -52,103 +54,203 @@
           <span class="sync-dot"></span>
           <span id="syncStatusText">Syncing...</span>
         </div>
-        <button id="headerDownloadBtn" class="btn btn-primary header-download-btn" title="Export full report view as PNG image">
+        <button id="headerBackupBtn" class="btn btn-primary header-backup-btn" title="Backup full ledger & all 10 tabs to Google Sheets">
+          <i data-lucide="cloud-upload"></i>
+          <span>Backup</span>
+        </button>
+        <button id="headerDownloadBtn" class="btn btn-secondary header-download-btn" title="Export full report view as PNG image">
           <i data-lucide="download"></i>
           <span>Download</span>
         </button>
       </div>
     </header>
 
-    <!-- Main Content Area (Captured for Image Export) -->
-    <main class="main-content" id="mainCaptureArea">
+    <!-- App Body Layout with Left-Side Vertical Sidebar & Main Content -->
+    <div class="app-layout-container">
       
-      <div class="table-card">
-        <!-- Real-Time Connection Warning Banner -->
-        <div id="syncWarningBanner" class="sync-warning-banner hidden" data-html2canvas-ignore="true">
-          <i data-lucide="alert-triangle"></i>
-          <span>Real-time synchronization connection is not established. Working in offline mode (changes saved locally).</span>
+      <!-- Left-Side Vertical Tab Navigation Sidebar -->
+      <aside id="leftSidebarTabs" class="left-tab-sidebar" data-html2canvas-ignore="true">
+        <div class="sidebar-panel-header">
+          <div class="sidebar-title-box">
+            <i data-lucide="layout-grid"></i>
+            <span>Tabs</span>
+          </div>
+          <button id="mobileSidebarToggleBtn" class="sidebar-mobile-toggle-btn" title="Toggle Navigation Sidebar">
+            <i data-lucide="menu"></i>
+          </button>
+        </div>
+        
+        <div class="sidebar-tab-sections" id="sidebarTabsList">
+          <!-- Dynamically populated as a simple compact list -->
+        </div>
+      </aside>
+
+      <!-- Main Content Area (Captured for Image Export) -->
+      <main class="main-content" id="mainCaptureArea">
+        
+        <!-- VIEW 1: Main Narration Sheet / Table (Home View) -->
+        <div class="table-card view-panel" id="narrationView">
+          <!-- Real-Time Connection Warning Banner -->
+          <div id="syncWarningBanner" class="sync-warning-banner hidden" data-html2canvas-ignore="true">
+            <i data-lucide="alert-triangle"></i>
+            <span>Real-time synchronization connection is not established. Working in offline mode (changes saved locally).</span>
+          </div>
+
+          <div class="table-header-row">
+            <div class="table-info" data-html2canvas-ignore="true">
+              <i data-lucide="database"></i>
+              <h2>Stock Reconciliation</h2>
+            </div>
+            
+            <!-- Document Level Metadata (Date and Reference) -->
+            <div class="meta-container">
+              <div class="ref-container">
+                <span class="ref-label">DATE:</span>
+                <input type="date" id="docDateInput" class="ref-input">
+              </div>
+              <div class="ref-container">
+                <span class="ref-label">REF:</span>
+                <input type="text" id="referenceInput" placeholder="Enter Ref No..." class="ref-input">
+              </div>
+            </div>
+
+            <div class="table-actions" data-html2canvas-ignore="true">
+              <button id="backupLedgerBtn" class="btn btn-primary btn-sm backup-ledger-btn" title="Backup full ledger and all 10 sub-tabs to Google Sheets">
+                <i data-lucide="cloud-upload"></i> Backup to Google Sheets
+              </button>
+              <button id="googleSheetsSettingsBtn" class="btn btn-outline btn-sm" title="Configure Google Sheets Web App URL">
+                <i data-lucide="settings"></i>
+              </button>
+              <button id="addRowBtn" class="btn btn-secondary btn-sm" title="Add extra row (Row 11+)">
+                <i data-lucide="plus"></i> Add Row
+              </button>
+              <button id="resetTableBtn" class="btn btn-outline btn-sm">
+                <i data-lucide="rotate-ccw"></i> Reset
+              </button>
+            </div>
+          </div>
+
+          <!-- Ledger Spreadsheet Grid -->
+          <div class="table-responsive">
+            <table class="ledger-table" id="reconciliationTable">
+              <thead>
+                <tr>
+                  <th class="col-num-th">No.</th>
+                  <th class="col-narration-th">NARRATION</th>
+                  <th class="col-val-th">1</th>
+                  <th class="col-val-th">2</th>
+                  <th class="col-val-th">3</th>
+                  <th class="col-res-th">4</th>
+                  <th class="col-action-th no-capture-cell" data-html2canvas-ignore="true">Action</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody">
+                <!-- Dynamically populated rows (Rows 1-10 reserved for sub-sheets, Row 11+ for manual entries) -->
+              </tbody>
+              <tfoot>
+                <!-- Bottom Add Extra Row Action -->
+                <tr class="add-row-tr" data-html2canvas-ignore="true">
+                  <td colspan="7" style="padding: 0.5rem 0.75rem; background-color: var(--bg-input);">
+                    <button id="addBottomRowBtn" class="btn btn-secondary btn-sm" style="width: 100%; justify-content: center;">
+                      <i data-lucide="plus-circle"></i> Add Extra Row (Row 11+)
+                    </button>
+                  </td>
+                </tr>
+
+                <!-- Summary Rows aligned under Column 4 -->
+                <tr class="summary-tr">
+                  <td colspan="5" class="summary-label-cell">ON HAND STOCK</td>
+                  <td class="summary-value-cell" id="onHandStockVal"></td>
+                  <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
+                </tr>
+                <tr class="summary-tr">
+                  <td colspan="5" class="summary-label-cell">PHYSICAL STOCK</td>
+                  <td class="summary-value-cell input-cell">
+                    <input type="number" id="physicalStockInput" step="0.01" placeholder="" class="summary-table-input">
+                  </td>
+                  <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
+                </tr>
+                <tr class="summary-tr">
+                  <td colspan="5" class="summary-label-cell">DIFFERENCE</td>
+                  <td class="summary-value-cell" id="differenceVal"></td>
+                  <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
         </div>
 
-        <div class="table-header-row">
-          <div class="table-info" data-html2canvas-ignore="true">
-            <i data-lucide="database"></i>
-            <h2>Stock Reconciliation</h2>
-          </div>
+        <!-- VIEW 2: Dynamic Sub-Tab View Panel (Tabs 1 to 10) -->
+        <div class="table-card view-panel hidden" id="subTabContentArea">
           
-          <!-- Document Level Metadata (Date and Reference) -->
-          <div class="meta-container">
-            <div class="ref-container">
-              <span class="ref-label">DATE:</span>
-              <input type="date" id="docDateInput" class="ref-input">
-            </div>
-            <div class="ref-container">
-              <span class="ref-label">REF:</span>
-              <input type="text" id="referenceInput" placeholder="Enter Ref No..." class="ref-input">
-            </div>
-          </div>
-
-          <div class="table-actions" data-html2canvas-ignore="true">
-            <button id="addRowBtn" class="btn btn-secondary btn-sm">
-              <i data-lucide="plus"></i> Add Row
-            </button>
-            <button id="resetTableBtn" class="btn btn-outline btn-sm">
-              <i data-lucide="rotate-ccw"></i> Reset
-            </button>
-          </div>
-        </div>
-
-        <!-- Ledger Spreadsheet Grid -->
-        <div class="table-responsive">
-          <table class="ledger-table" id="reconciliationTable">
-            <thead>
-              <tr>
-                <th class="col-num-th">No.</th>
-                <th class="col-narration-th">NARRATION</th>
-                <th class="col-val-th">1</th>
-                <th class="col-val-th">2</th>
-                <th class="col-val-th">3</th>
-                <th class="col-res-th">4</th>
-                <th class="col-action-th no-capture-cell" data-html2canvas-ignore="true">Action</th>
-              </tr>
-            </thead>
-            <tbody id="tableBody">
-              <!-- Dynamically populated rows -->
-            </tbody>
-            <tfoot>
-              <!-- Bottom Add Extra Row Action -->
-              <tr class="add-row-tr" data-html2canvas-ignore="true">
-                <td colspan="7" style="padding: 0.5rem 0.75rem; background-color: var(--bg-input);">
-                  <button id="addBottomRowBtn" class="btn btn-secondary btn-sm" style="width: 100%; justify-content: center;">
-                    <i data-lucide="plus-circle"></i> Add Extra Row
+          <div class="table-header-row subtab-header-row">
+            <div class="subtab-header-left">
+              <button id="subTabBackBtn" class="btn btn-outline btn-sm back-to-narration-btn" title="Back to Narration">
+                <i data-lucide="arrow-left"></i>
+                <span>Narration</span>
+              </button>
+              <div class="subtab-title-wrapper">
+                <div class="tab-title-edit-container">
+                  <h2 id="subTabTitleDisplay" class="subtab-title-text" title="Click or use rename to change name">Tab 1</h2>
+                  <button id="editTabNameBtn" class="btn-icon-subtle" title="Rename this tab">
+                    <i data-lucide="edit-3"></i>
                   </button>
-                </td>
-              </tr>
+                  <input type="text" id="subTabTitleInput" class="subtab-title-input hidden" maxlength="35" placeholder="Enter tab name...">
+                </div>
+              </div>
+            </div>
 
-              <!-- Summary Rows aligned under Column 4 -->
-              <tr class="summary-tr">
-                <td colspan="5" class="summary-label-cell">ON HAND STOCK</td>
-                <td class="summary-value-cell" id="onHandStockVal"></td>
-                <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
-              </tr>
-              <tr class="summary-tr">
-                <td colspan="5" class="summary-label-cell">PHYSICAL STOCK</td>
-                <td class="summary-value-cell input-cell">
-                  <input type="number" id="physicalStockInput" step="0.01" placeholder="" class="summary-table-input">
-                </td>
-                <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
-              </tr>
-              <tr class="summary-tr">
-                <td colspan="5" class="summary-label-cell">DIFFERENCE</td>
-                <td class="summary-value-cell" id="differenceVal"></td>
-                <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
-              </tr>
-            </tfoot>
-          </table>
+            <!-- Document Level Metadata for Sub-Tab (Date) -->
+            <div class="meta-container">
+              <div class="ref-container">
+                <span class="ref-label">DATE:</span>
+                <input type="date" id="subTabDateInput" class="ref-input">
+              </div>
+            </div>
+
+            <div class="table-actions" data-html2canvas-ignore="true">
+              <button id="subTabAddRowBtn" class="btn btn-secondary btn-sm">
+                <i data-lucide="plus"></i> Add Item
+              </button>
+              <button id="subTabResetBtn" class="btn btn-outline btn-sm reset-tab-btn" title="Reset this tab only">
+                <i data-lucide="rotate-ccw"></i> Reset Tab
+              </button>
+            </div>
+          </div>
+
+          <!-- Metric Highlight Cards Area for Active Sub-Tab -->
+          <div id="subTabMetricsArea" class="subtab-metrics-container">
+            <!-- Dynamically populated metric cards -->
+          </div>
+
+          <!-- Active Sub-Tab Table -->
+          <div class="table-responsive">
+            <table class="ledger-table subtab-ledger-table" id="subTabTable">
+              <thead id="subTabTableHead">
+                <!-- Dynamically populated according to tab group -->
+              </thead>
+              <tbody id="subTabTableBody">
+                <!-- Dynamically populated rows -->
+              </tbody>
+              <tfoot id="subTabTableFoot">
+                <!-- Dynamically populated footer calculations -->
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- Bottom Add Row Action for Sub-Tabs -->
+          <div class="subtab-bottom-actions" data-html2canvas-ignore="true" style="margin-top: 0.85rem;">
+            <button id="subTabBottomAddRowBtn" class="btn btn-secondary btn-sm" style="width: 100%; justify-content: center;">
+              <i data-lucide="plus-circle"></i> + Add Item
+            </button>
+          </div>
+
         </div>
 
-      </div>
+      </main>
 
-    </main>
+    </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden">
@@ -156,19 +258,147 @@
       <span id="toastMessage">Action completed successfully</span>
     </div>
 
-    <!-- Confirm Delete Row Modal -->
+    <!-- Generic Confirmation Modal (Delete Row, Reset Tab, Reset Main) -->
     <div id="confirmModal" class="modal-overlay hidden" data-html2canvas-ignore="true">
       <div class="modal-card">
         <div class="modal-header">
-          <div class="modal-icon warning">
+          <div class="modal-icon warning" id="modalIconBox">
             <i data-lucide="alert-circle"></i>
           </div>
-          <h3>Delete Row</h3>
+          <h3 id="modalTitle">Confirm Action</h3>
         </div>
-        <p class="modal-message">Are you sure you want to delete this row? This action cannot be undone.</p>
+        <p class="modal-message" id="modalMessageText">Are you sure you want to proceed?</p>
         <div class="modal-actions">
-          <button id="cancelDeleteBtn" class="btn btn-outline">Cancel</button>
-          <button id="confirmDeleteBtn" class="btn btn-danger">Delete Row</button>
+          <button id="cancelModalBtn" class="btn btn-outline">Cancel</button>
+          <button id="confirmModalBtn" class="btn btn-danger">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backup Options Modal (Multi-Session & Versioning) -->
+    <div id="backupOptionsModal" class="modal-overlay hidden" data-html2canvas-ignore="true">
+      <div class="modal-card backup-options-modal-card">
+        <div class="modal-header">
+          <div class="modal-icon primary" style="background-color: rgba(5, 150, 105, 0.12); color: #059669;">
+            <i data-lucide="cloud-upload"></i>
+          </div>
+          <div style="flex: 1;">
+            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Google Sheets Backup Manager</h3>
+            <p id="backupModalSubtext" style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">Date: Today | Ref: N/A</p>
+          </div>
+          <button id="backupModalSettingsLinkBtn" class="btn btn-icon btn-sm" title="Google Sheets Settings" type="button">
+            <i data-lucide="settings"></i>
+          </button>
+        </div>
+
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 0.9rem;">
+          <!-- Session / Batch Selection -->
+          <div class="backup-session-box" style="background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem;">
+            <label for="backupSessionNameInput" style="display: block; font-weight: 700; font-size: 0.82rem; margin-bottom: 0.35rem; color: var(--text-primary);">
+              Session / Batch Name:
+            </label>
+            <input type="text" id="backupSessionNameInput" class="summary-table-input" value="Session 1" placeholder="e.g. Session 1, Evening Shift" style="width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; font-weight: 600; box-sizing: border-box;">
+            <div class="session-chips" style="display: flex; gap: 0.35rem; margin-top: 0.45rem; flex-wrap: wrap;">
+              <button type="button" class="session-chip-btn active" data-session="Session 1">Session 1</button>
+              <button type="button" class="session-chip-btn" data-session="Session 2">Session 2</button>
+              <button type="button" class="session-chip-btn" data-session="Morning Shift">Morning Shift</button>
+              <button type="button" class="session-chip-btn" data-session="Evening Shift">Evening Shift</button>
+            </div>
+          </div>
+
+          <!-- 3 Explicit Action Cards -->
+          <div class="backup-action-cards" style="display: flex; flex-direction: column; gap: 0.6rem;">
+            
+            <!-- Option 1: Update Today's Backup -->
+            <button type="button" id="backupOptionUpdateBtn" class="backup-action-card update-card">
+              <div class="action-card-icon update-icon">
+                <i data-lucide="refresh-cw"></i>
+              </div>
+              <div class="action-card-content">
+                <div class="action-card-title">Update Today's Backup</div>
+                <div class="action-card-desc">Syncs &amp; overwrites today's session with latest table &amp; summary values. Prior days remain intact.</div>
+              </div>
+              <i data-lucide="chevron-right" class="action-card-arrow"></i>
+            </button>
+
+            <!-- Option 2: Append as New Session -->
+            <button type="button" id="backupOptionAppendBtn" class="backup-action-card append-card">
+              <div class="action-card-icon append-icon">
+                <i data-lucide="plus-circle"></i>
+              </div>
+              <div class="action-card-content">
+                <div class="action-card-title">Append as New Session</div>
+                <div class="action-card-desc">Adds a new, independent table block stacked sequentially under today's date.</div>
+              </div>
+              <i data-lucide="chevron-right" class="action-card-arrow"></i>
+            </button>
+
+            <!-- Option 3: Delete Today's Backup -->
+            <button type="button" id="backupOptionDeleteBtn" class="backup-action-card delete-card">
+              <div class="action-card-icon delete-icon">
+                <i data-lucide="trash-2"></i>
+              </div>
+              <div class="action-card-content">
+                <div class="action-card-title">Delete Today's Backup</div>
+                <div class="action-card-desc">Completely clears today's table for this session from Google Sheets. Past records preserved.</div>
+              </div>
+              <i data-lucide="chevron-right" class="action-card-arrow"></i>
+            </button>
+
+          </div>
+        </div>
+
+        <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+          <button id="openGoogleSheetsSettingsFromOptionsBtn" class="btn btn-outline btn-sm" type="button" style="color: var(--text-secondary); font-size: 0.8rem;">
+            <i data-lucide="link"></i> Web App URL Setup
+          </button>
+          <button id="closeBackupOptionsModalBtn" class="btn btn-outline" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Google Sheets Backup Settings & Setup Modal -->
+    <div id="googleSheetsModal" class="modal-overlay hidden" data-html2canvas-ignore="true">
+      <div class="modal-card google-sheets-modal-card">
+        <div class="modal-header">
+          <div class="modal-icon primary" style="background-color: rgba(214, 107, 48, 0.12); color: var(--primary-color);">
+            <i data-lucide="file-spreadsheet"></i>
+          </div>
+          <div>
+            <h3 id="googleSheetsModalTitle" style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Google Sheets Backup Setup</h3>
+            <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">One-click automated historical backup &amp; archival</p>
+          </div>
+        </div>
+
+        <div class="modal-body" style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; display: flex; flex-direction: column; gap: 0.85rem;">
+          <div class="setup-steps-box" style="background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem;">
+            <strong style="color: var(--text-primary); display: block; margin-bottom: 0.4rem;">Quick 2-Minute Setup:</strong>
+            <ol style="margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem;">
+              <li>Open your Google Sheet &amp; go to <strong>Extensions &gt; Apps Script</strong>.</li>
+              <li>Paste the script code (click button below to copy).</li>
+              <li>Click <strong>Deploy &gt; New deployment</strong>, select <strong>Web app</strong>.</li>
+              <li>Set <em>Execute as:</em> <strong>User accessing the web app</strong> (or <strong>Me</strong>) and <em>Who has access:</em> <strong>Anyone</strong>.</li>
+              <li>Copy the generated <strong>Web App URL</strong> and paste it below.</li>
+            </ol>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end;">
+            <button id="copyScriptCodeBtn" class="btn btn-outline btn-sm" type="button">
+              <i data-lucide="copy"></i> Copy Apps Script Code
+            </button>
+          </div>
+
+          <div>
+            <label for="googleSheetsUrlInput" style="display: block; font-weight: 700; font-size: 0.82rem; margin-bottom: 0.35rem; color: var(--text-primary);">
+              Google Apps Script Web App URL:
+            </label>
+            <input type="url" id="googleSheetsUrlInput" class="summary-table-input" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: monospace; font-size: 0.82rem;">
+          </div>
+        </div>
+
+        <div class="modal-actions" style="display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 0.5rem;">
+          <button id="closeGoogleSheetsModalBtn" class="btn btn-outline">Cancel</button>
+          <button id="saveGoogleSheetsUrlBtn" class="btn btn-primary">Save &amp; Backup Now</button>
         </div>
       </div>
     </div>
