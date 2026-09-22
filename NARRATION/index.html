@@ -54,10 +54,6 @@
           <span class="sync-dot"></span>
           <span id="syncStatusText">Syncing...</span>
         </div>
-        <button id="headerBackupBtn" class="btn btn-primary header-backup-btn" title="Backup full ledger & all 10 tabs to Google Sheets">
-          <i data-lucide="cloud-upload"></i>
-          <span>Backup</span>
-        </button>
         <button id="headerDownloadBtn" class="btn btn-secondary header-download-btn" title="Export full report view as PNG image">
           <i data-lucide="download"></i>
           <span>Download</span>
@@ -115,12 +111,6 @@
             </div>
 
             <div class="table-actions" data-html2canvas-ignore="true">
-              <button id="backupLedgerBtn" class="btn btn-primary btn-sm backup-ledger-btn" title="Backup full ledger and all 10 sub-tabs to Google Sheets">
-                <i data-lucide="cloud-upload"></i> Backup to Google Sheets
-              </button>
-              <button id="googleSheetsSettingsBtn" class="btn btn-outline btn-sm" title="Configure Google Sheets Web App URL">
-                <i data-lucide="settings"></i>
-              </button>
               <button id="addRowBtn" class="btn btn-secondary btn-sm" title="Add extra row (Row 11+)">
                 <i data-lucide="plus"></i> Add Row
               </button>
@@ -136,11 +126,11 @@
               <thead>
                 <tr>
                   <th class="col-num-th">No.</th>
-                  <th class="col-narration-th">NARRATION</th>
-                  <th class="col-val-th">1</th>
-                  <th class="col-val-th">2</th>
-                  <th class="col-val-th">3</th>
-                  <th class="col-res-th">4</th>
+                  <th class="col-narration-th" data-col-idx="1">NARRATION</th>
+                  <th class="col-val-th" data-col-idx="2">1</th>
+                  <th class="col-val-th" data-col-idx="3">2</th>
+                  <th class="col-val-th" data-col-idx="4">3</th>
+                  <th class="col-res-th" data-col-idx="5">4</th>
                   <th class="col-action-th no-capture-cell" data-html2canvas-ignore="true">Action</th>
                 </tr>
               </thead>
@@ -271,134 +261,6 @@
         <div class="modal-actions">
           <button id="cancelModalBtn" class="btn btn-outline">Cancel</button>
           <button id="confirmModalBtn" class="btn btn-danger">Confirm</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Backup Options Modal (Multi-Session & Versioning) -->
-    <div id="backupOptionsModal" class="modal-overlay hidden" data-html2canvas-ignore="true">
-      <div class="modal-card backup-options-modal-card">
-        <div class="modal-header">
-          <div class="modal-icon primary" style="background-color: rgba(5, 150, 105, 0.12); color: #059669;">
-            <i data-lucide="cloud-upload"></i>
-          </div>
-          <div style="flex: 1;">
-            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Google Sheets Backup Manager</h3>
-            <p id="backupModalSubtext" style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">Date: Today | Ref: N/A</p>
-          </div>
-          <button id="backupModalSettingsLinkBtn" class="btn btn-icon btn-sm" title="Google Sheets Settings" type="button">
-            <i data-lucide="settings"></i>
-          </button>
-        </div>
-
-        <div class="modal-body" style="display: flex; flex-direction: column; gap: 0.9rem;">
-          <!-- Session / Batch Selection -->
-          <div class="backup-session-box" style="background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem;">
-            <label for="backupSessionNameInput" style="display: block; font-weight: 700; font-size: 0.82rem; margin-bottom: 0.35rem; color: var(--text-primary);">
-              Session / Batch Name:
-            </label>
-            <input type="text" id="backupSessionNameInput" class="summary-table-input" value="Session 1" placeholder="e.g. Session 1, Evening Shift" style="width: 100%; padding: 0.55rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; font-weight: 600; box-sizing: border-box;">
-            <div class="session-chips" style="display: flex; gap: 0.35rem; margin-top: 0.45rem; flex-wrap: wrap;">
-              <button type="button" class="session-chip-btn active" data-session="Session 1">Session 1</button>
-              <button type="button" class="session-chip-btn" data-session="Session 2">Session 2</button>
-              <button type="button" class="session-chip-btn" data-session="Morning Shift">Morning Shift</button>
-              <button type="button" class="session-chip-btn" data-session="Evening Shift">Evening Shift</button>
-            </div>
-          </div>
-
-          <!-- 3 Explicit Action Cards -->
-          <div class="backup-action-cards" style="display: flex; flex-direction: column; gap: 0.6rem;">
-            
-            <!-- Option 1: Update Today's Backup -->
-            <button type="button" id="backupOptionUpdateBtn" class="backup-action-card update-card">
-              <div class="action-card-icon update-icon">
-                <i data-lucide="refresh-cw"></i>
-              </div>
-              <div class="action-card-content">
-                <div class="action-card-title">Update Today's Backup</div>
-                <div class="action-card-desc">Syncs &amp; overwrites today's session with latest table &amp; summary values. Prior days remain intact.</div>
-              </div>
-              <i data-lucide="chevron-right" class="action-card-arrow"></i>
-            </button>
-
-            <!-- Option 2: Append as New Session -->
-            <button type="button" id="backupOptionAppendBtn" class="backup-action-card append-card">
-              <div class="action-card-icon append-icon">
-                <i data-lucide="plus-circle"></i>
-              </div>
-              <div class="action-card-content">
-                <div class="action-card-title">Append as New Session</div>
-                <div class="action-card-desc">Adds a new, independent table block stacked sequentially under today's date.</div>
-              </div>
-              <i data-lucide="chevron-right" class="action-card-arrow"></i>
-            </button>
-
-            <!-- Option 3: Delete Today's Backup -->
-            <button type="button" id="backupOptionDeleteBtn" class="backup-action-card delete-card">
-              <div class="action-card-icon delete-icon">
-                <i data-lucide="trash-2"></i>
-              </div>
-              <div class="action-card-content">
-                <div class="action-card-title">Delete Today's Backup</div>
-                <div class="action-card-desc">Completely clears today's table for this session from Google Sheets. Past records preserved.</div>
-              </div>
-              <i data-lucide="chevron-right" class="action-card-arrow"></i>
-            </button>
-
-          </div>
-        </div>
-
-        <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
-          <button id="openGoogleSheetsSettingsFromOptionsBtn" class="btn btn-outline btn-sm" type="button" style="color: var(--text-secondary); font-size: 0.8rem;">
-            <i data-lucide="link"></i> Web App URL Setup
-          </button>
-          <button id="closeBackupOptionsModalBtn" class="btn btn-outline" type="button">Close</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Google Sheets Backup Settings & Setup Modal -->
-    <div id="googleSheetsModal" class="modal-overlay hidden" data-html2canvas-ignore="true">
-      <div class="modal-card google-sheets-modal-card">
-        <div class="modal-header">
-          <div class="modal-icon primary" style="background-color: rgba(214, 107, 48, 0.12); color: var(--primary-color);">
-            <i data-lucide="file-spreadsheet"></i>
-          </div>
-          <div>
-            <h3 id="googleSheetsModalTitle" style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Google Sheets Backup Setup</h3>
-            <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">One-click automated historical backup &amp; archival</p>
-          </div>
-        </div>
-
-        <div class="modal-body" style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; display: flex; flex-direction: column; gap: 0.85rem;">
-          <div class="setup-steps-box" style="background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem;">
-            <strong style="color: var(--text-primary); display: block; margin-bottom: 0.4rem;">Quick 2-Minute Setup:</strong>
-            <ol style="margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem;">
-              <li>Open your Google Sheet &amp; go to <strong>Extensions &gt; Apps Script</strong>.</li>
-              <li>Paste the script code (click button below to copy).</li>
-              <li>Click <strong>Deploy &gt; New deployment</strong>, select <strong>Web app</strong>.</li>
-              <li>Set <em>Execute as:</em> <strong>User accessing the web app</strong> (or <strong>Me</strong>) and <em>Who has access:</em> <strong>Anyone</strong>.</li>
-              <li>Copy the generated <strong>Web App URL</strong> and paste it below.</li>
-            </ol>
-          </div>
-
-          <div style="display: flex; justify-content: flex-end;">
-            <button id="copyScriptCodeBtn" class="btn btn-outline btn-sm" type="button">
-              <i data-lucide="copy"></i> Copy Apps Script Code
-            </button>
-          </div>
-
-          <div>
-            <label for="googleSheetsUrlInput" style="display: block; font-weight: 700; font-size: 0.82rem; margin-bottom: 0.35rem; color: var(--text-primary);">
-              Google Apps Script Web App URL:
-            </label>
-            <input type="url" id="googleSheetsUrlInput" class="summary-table-input" placeholder="https://script.google.com/macros/s/.../exec" style="width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: monospace; font-size: 0.82rem;">
-          </div>
-        </div>
-
-        <div class="modal-actions" style="display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 0.5rem;">
-          <button id="closeGoogleSheetsModalBtn" class="btn btn-outline">Cancel</button>
-          <button id="saveGoogleSheetsUrlBtn" class="btn btn-primary">Save &amp; Backup Now</button>
         </div>
       </div>
     </div>

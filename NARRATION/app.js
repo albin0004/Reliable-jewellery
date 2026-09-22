@@ -53,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
     DOC_DATE: 'narration_doc_date_v8',
     TABS_META: 'narration_tabs_meta_v8',
     TABS_DATA: 'narration_tabs_data_v8',
-    GOOGLE_SHEETS_URL: 'narration_google_sheets_url_v1',
     // Fallback legacy keys
     LEGACY_ROWS: 'narration_reconciliation_rows_v7'
   };
@@ -120,8 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Shared Components
   const headerDownloadBtn = document.getElementById('headerDownloadBtn');
-  const headerBackupBtn = document.getElementById('headerBackupBtn');
-  const backupLedgerBtn = document.getElementById('backupLedgerBtn');
   const syncBadge = document.getElementById('syncBadge');
   const syncStatusText = document.getElementById('syncStatusText');
   const syncWarningBanner = document.getElementById('syncWarningBanner');
@@ -135,26 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelModalBtn = document.getElementById('cancelModalBtn');
   const confirmModalBtn = document.getElementById('confirmModalBtn');
   let modalConfirmCallback = null;
-
-  // Google Sheets Backup Modal Elements
-  const googleSheetsModal = document.getElementById('googleSheetsModal');
-  const googleSheetsUrlInput = document.getElementById('googleSheetsUrlInput');
-  const saveGoogleSheetsUrlBtn = document.getElementById('saveGoogleSheetsUrlBtn');
-  const closeGoogleSheetsModalBtn = document.getElementById('closeGoogleSheetsModalBtn');
-  const copyScriptCodeBtn = document.getElementById('copyScriptCodeBtn');
-  const googleSheetsSettingsBtn = document.getElementById('googleSheetsSettingsBtn');
-
-  // Backup Options Modal Elements (Multi-Session & Versioning)
-  const backupOptionsModal = document.getElementById('backupOptionsModal');
-  const backupModalSubtext = document.getElementById('backupModalSubtext');
-  const backupModalSettingsLinkBtn = document.getElementById('backupModalSettingsLinkBtn');
-  const backupSessionNameInput = document.getElementById('backupSessionNameInput');
-  const sessionChipBtns = document.querySelectorAll('.session-chip-btn');
-  const backupOptionUpdateBtn = document.getElementById('backupOptionUpdateBtn');
-  const backupOptionAppendBtn = document.getElementById('backupOptionAppendBtn');
-  const backupOptionDeleteBtn = document.getElementById('backupOptionDeleteBtn');
-  const openGoogleSheetsSettingsFromOptionsBtn = document.getElementById('openGoogleSheetsSettingsFromOptionsBtn');
-  const closeBackupOptionsModalBtn = document.getElementById('closeBackupOptionsModalBtn');
 
   // --- Lucide Icons Refresh Helper ---
   function refreshIcons() {
@@ -461,21 +438,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
       tr.innerHTML = `
         <td class="row-num-cell" data-label="NUMBER">${i}</td>
-        <td data-label="NARRATION">
+        <td data-label="NARRATION" data-col-idx="1">
           <div class="reserved-narration-cell">
             <textarea class="cell-textarea col-narration" rows="1" placeholder="Tab ${i} name...">${tabName}</textarea>
           </div>
         </td>
-        <td data-label="1">
-          <input type="text" class="cell-input col-1 reserved-input" disabled value="—" title="Calculated in ${tabName}">
+        <td data-label="1" data-col-idx="2">
+          <input type="text" class="cell-input col-1 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName}">
         </td>
-        <td data-label="2">
-          <input type="text" class="cell-input col-2 reserved-input" disabled value="—" title="Calculated in ${tabName}">
+        <td data-label="2" data-col-idx="3">
+          <input type="text" class="cell-input col-2 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName}">
         </td>
-        <td data-label="3">
-          <input type="text" class="cell-input col-3 reserved-input" disabled value="—" title="Calculated in ${tabName}">
+        <td data-label="3" data-col-idx="4">
+          <input type="text" class="cell-input col-3 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName}">
         </td>
-        <td class="computed-cell col-4-display reserved-col-4" data-label="4" title="Direct input disabled. Auto-calculated from ${tabName}"></td>
+        <td class="computed-cell col-4-display reserved-col-4" data-label="4" data-col-idx="5" title="Direct input disabled. Auto-calculated from ${tabName}"></td>
         <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
           <div class="row-actions-cell">
             <button class="delete-row-btn reserved-delete-btn" data-tab-id="${tabId}" title="Clear ${tabName} data">
@@ -536,19 +513,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tr.innerHTML = `
       <td class="row-num-cell" data-label="NUMBER"></td>
-      <td data-label="NARRATION">
+      <td data-label="NARRATION" data-col-idx="1">
         <textarea class="cell-textarea col-narration" placeholder="Enter narration..." rows="1">${data.narration || ''}</textarea>
       </td>
-      <td data-label="1">
-        <input type="number" class="cell-input col-1" step="0.01" placeholder="" value="${c1Formatted}">
+      <td data-label="1" data-col-idx="2">
+        <input type="text" inputmode="decimal" class="cell-input col-1" placeholder="" value="${c1Formatted}">
       </td>
-      <td data-label="2">
-        <input type="number" class="cell-input col-2" step="0.01" placeholder="" value="${c2Formatted}">
+      <td data-label="2" data-col-idx="3">
+        <input type="text" inputmode="decimal" class="cell-input col-2" placeholder="" value="${c2Formatted}">
       </td>
-      <td data-label="3">
-        <input type="number" class="cell-input col-3" step="0.01" placeholder="" value="${c3Formatted}">
+      <td data-label="3" data-col-idx="4">
+        <input type="text" inputmode="decimal" class="cell-input col-3" placeholder="" value="${c3Formatted}">
       </td>
-      <td class="computed-cell col-4-display" data-label="4"></td>
+      <td class="computed-cell col-4-display" data-label="4" data-col-idx="5"></td>
       <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
         <div class="row-actions-cell">
           <button class="delete-row-btn manual-delete-btn" title="Delete Row">
@@ -559,9 +536,12 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     // Event listeners
-    const numInputs = tr.querySelectorAll('.cell-input[type="number"]');
+    const numInputs = tr.querySelectorAll('.cell-input.col-1, .cell-input.col-2, .cell-input.col-3');
     numInputs.forEach(input => {
-      input.addEventListener('input', () => calculateReconciliation(true));
+      input.addEventListener('input', () => {
+        input.value = input.value.replace(/[^0-9.-]/g, '');
+        calculateReconciliation(true);
+      });
       input.addEventListener('blur', () => {
         if (input.value !== '') {
           input.value = formatTwoDecimals(input.value);
@@ -729,10 +709,10 @@ document.addEventListener('DOMContentLoaded', () => {
       subTabTableHead.innerHTML = `
         <tr>
           <th class="col-num-th">No.</th>
-          <th class="col-narration-th">Item Name</th>
-          <th class="col-val-th">2</th>
-          <th class="col-val-th">3</th>
-          <th class="col-val-th">4</th>
+          <th class="col-narration-th" data-col-idx="1">Item Name</th>
+          <th class="col-val-th" data-col-idx="2">2</th>
+          <th class="col-val-th" data-col-idx="3">3</th>
+          <th class="col-val-th" data-col-idx="4">4</th>
           <th class="col-action-th no-capture-cell" data-html2canvas-ignore="true">Action</th>
         </tr>
       `;
@@ -740,10 +720,10 @@ document.addEventListener('DOMContentLoaded', () => {
       subTabTableHead.innerHTML = `
         <tr>
           <th class="col-num-th">No.</th>
-          <th class="col-narration-th">Order / Item Name</th>
-          <th class="col-val-th">Amount / Value 1</th>
-          <th class="col-val-th">Value 2 (Ref)</th>
-          <th class="col-val-th">Value 3 (Ref)</th>
+          <th class="col-narration-th" data-col-idx="1">Order / Item Name</th>
+          <th class="col-val-th" data-col-idx="2">Amount / Value 1</th>
+          <th class="col-val-th" data-col-idx="3">Value 2 (Ref)</th>
+          <th class="col-val-th" data-col-idx="4">Value 3 (Ref)</th>
           <th class="col-action-th no-capture-cell" data-html2canvas-ignore="true">Action</th>
         </tr>
       `;
@@ -751,10 +731,10 @@ document.addEventListener('DOMContentLoaded', () => {
       subTabTableHead.innerHTML = `
         <tr>
           <th class="col-num-th">No.</th>
-          <th class="col-narration-th">DROM / Item Name</th>
-          <th class="col-val-th">Input Value A</th>
-          <th class="col-val-th">Input Value B</th>
-          <th class="col-val-th">Difference</th>
+          <th class="col-narration-th" data-col-idx="1">DROM / Item Name</th>
+          <th class="col-val-th" data-col-idx="2">Input Value A</th>
+          <th class="col-val-th" data-col-idx="3">Input Value B</th>
+          <th class="col-val-th" data-col-idx="4">Difference</th>
           <th class="col-action-th no-capture-cell" data-html2canvas-ignore="true">Action</th>
         </tr>
       `;
@@ -775,17 +755,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tr.innerHTML = `
           <td class="row-num-cell">${idx + 1}</td>
-          <td>
+          <td data-col-idx="1">
             <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
-          <td>
-            <input type="number" step="any" class="cell-input subtab-col-2" placeholder="" value="${col2Val}">
+          <td data-col-idx="2">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${col2Val}">
           </td>
-          <td>
-            <input type="number" step="any" class="cell-input subtab-col-3" placeholder="" value="${col3Val}">
+          <td data-col-idx="3">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${col3Val}">
           </td>
-          <td>
-            <input type="number" step="any" class="cell-input subtab-col-4" placeholder="" value="${col4Val}">
+          <td data-col-idx="4">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Val}">
           </td>
           <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
             <div class="row-actions-cell">
@@ -802,17 +782,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tr.innerHTML = `
           <td class="row-num-cell">${idx + 1}</td>
-          <td>
+          <td data-col-idx="1">
             <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
-          <td>
-            <input type="number" step="0.01" class="cell-input subtab-col-2" placeholder="" value="${col2Formatted}">
+          <td data-col-idx="2">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${col2Formatted}">
           </td>
-          <td>
-            <input type="number" step="0.01" class="cell-input subtab-col-3" placeholder="" value="${col3Formatted}">
+          <td data-col-idx="3">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${col3Formatted}">
           </td>
-          <td>
-            <input type="number" step="0.01" class="cell-input subtab-col-4" placeholder="" value="${col4Formatted}">
+          <td data-col-idx="4">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Formatted}">
           </td>
           <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
             <div class="row-actions-cell">
@@ -835,16 +815,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tr.innerHTML = `
           <td class="row-num-cell">${idx + 1}</td>
-          <td>
+          <td data-col-idx="1">
             <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
-          <td>
-            <input type="number" step="0.01" class="cell-input subtab-col-2" placeholder="" value="${valAFormatted}">
+          <td data-col-idx="2">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${valAFormatted}">
           </td>
-          <td>
-            <input type="number" step="0.01" class="cell-input subtab-col-3" placeholder="" value="${valBFormatted}">
+          <td data-col-idx="3">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${valBFormatted}">
           </td>
-          <td class="computed-cell subtab-col-diff">
+          <td class="computed-cell subtab-col-diff" data-col-idx="4">
             ${rowDiffFormatted}
           </td>
           <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
@@ -902,7 +882,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       [col2Input, col3Input, col4Input].forEach(inp => {
         if (!inp) return;
-        inp.addEventListener('input', handleCellInput);
+        inp.addEventListener('input', () => {
+          inp.value = inp.value.replace(/[^0-9.-]/g, '');
+          handleCellInput();
+        });
         inp.addEventListener('blur', () => {
           if (cfg.group !== 'A' && inp.value !== '') {
             inp.value = formatTwoDecimals(inp.value);
@@ -1942,570 +1925,225 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // GOOGLE SHEETS BACKUP & HISTORICAL ARCHIVAL
+  // EXCEL & GOOGLE SHEETS TABLE COPY ENGINE
   // ==========================================
 
-  const GOOGLE_APPS_SCRIPT_CODE = `/**
- * @OnlyCurrentDoc
- * =========================================================================
- * NARRATION STOCK LEDGER - ADVANCED GOOGLE SHEETS BACKUP MANAGER
- * Multi-Session Versioning, Idempotent Overwrite & Historical Archival
- * =========================================================================
- * 
- * DEPLOYMENT OPTIONS:
- * - Execute As: "User accessing the web app" OR "Me"
- * - Who has access: "Anyone with a Google Account" OR "Anyone"
- * =========================================================================
- */
+  function getFormattedTableData(targetView) {
+    if (targetView === 'narration') {
+      const headers = ['No.', 'NARRATION', '1', '2', '3', '4'];
+      const rows = [];
 
-function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "ok",
-    service: "Narration Advanced Google Sheets Backup Manager",
-    timestamp: new Date().toISOString()
-  })).setMimeType(ContentService.MimeType.JSON);
-}
-
-/**
- * Creates custom menu in Google Sheets
- */
-function onOpen() {
-  try {
-    SpreadsheetApp.getUi()
-      .createMenu("Narration Ledger")
-      .addItem("Clean Tab Names (Remove 'Backup')", "cleanAllTabNames")
-      .addToUi();
-  } catch (e) {}
-}
-
-/**
- * Clean and rename all legacy tabs in Google Sheets:
- * "Narration_Backup" -> "Narration"
- * "Tab_1_Backup" -> "Tab 1", ... "Tab_10_Backup" -> "Tab 10"
- * Can be run manually from Apps Script Editor (select cleanAllTabNames and click Run)
- */
-function cleanAllTabNames() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  renameAllLegacyTabs(ss);
-}
-
-/**
- * Rename any sheet having "_Backup" or "Backup" to clean names
- */
-function renameAllLegacyTabs(ss) {
-  const sheets = ss.getSheets();
-  sheets.forEach(sheet => {
-    const currentName = sheet.getName();
-
-    // 1. Narration sheet
-    if (/^Narration[ _]?Backup$/i.test(currentName)) {
-      const targetName = "Narration";
-      const existingTarget = ss.getSheetByName(targetName);
-      if (!existingTarget) {
-        try { sheet.setName(targetName); } catch(e) {}
-      } else if (existingTarget.getLastRow() <= 1 && sheet.getLastRow() > 1) {
-        try {
-          ss.deleteSheet(existingTarget);
-          sheet.setName(targetName);
-        } catch(e) {}
+      // Rows 1-10: Reserved rows
+      for (let i = 1; i <= 10; i++) {
+        const tabId = `tab${i}`;
+        const cfg = TABS_CONFIG.find(t => t.id === tabId);
+        const tabName = state.tabsMeta[tabId]?.name || cfg?.defaultName || `Tab ${i}`;
+        const subResult = calculateSubTab(tabId);
+        const balance = (i <= 5)
+          ? (subResult.hasData ? formatExact(subResult.narrationOutput) : '')
+          : (subResult.hasData ? formatTwoDecimals(subResult.narrationOutput) : '');
+        rows.push([String(i), tabName, '', '', '', balance]);
       }
-      return;
+
+      // Rows 11+: Manual rows
+      const manualRows = state.narration.rows || [];
+      manualRows.forEach((r, idx) => {
+        rows.push([
+          String(10 + idx + 1),
+          r.colNarration || '',
+          r.c1 !== '' && r.c1 !== undefined ? formatTwoDecimals(r.c1) : '',
+          r.c2 !== '' && r.c2 !== undefined ? formatTwoDecimals(r.c2) : '',
+          r.c3 !== '' && r.c3 !== undefined ? formatTwoDecimals(r.c3) : '',
+          r.c4 !== '' && r.c4 !== undefined ? formatTwoDecimals(r.c4) : ''
+        ]);
+      });
+
+      const onHandVal = document.getElementById('onHandStockVal')?.textContent || '';
+      const physicalVal = physicalStockInput?.value !== '' ? formatTwoDecimals(physicalStockInput.value) : '';
+      const diffVal = document.getElementById('differenceVal')?.textContent || '';
+
+      const summary = [
+        ['', 'ON HAND STOCK', '', '', '', onHandVal],
+        ['', 'PHYSICAL STOCK', '', '', '', physicalVal],
+        ['', 'DIFFERENCE', '', '', '', diffVal]
+      ];
+
+      return {
+        title: 'Stock Reconciliation',
+        headers,
+        rows,
+        summary
+      };
     }
 
-    // 2. Sub-tab sheets (Tab_1_Backup, Tab 1 Backup, etc.)
-    const match = currentName.match(/^Tab[ _]?(\d+)[ _]?Backup$/i);
-    if (match) {
-      const tabNum = match[1];
-      const targetName = "Tab " + tabNum;
-      const existingTarget = ss.getSheetByName(targetName);
-      if (!existingTarget) {
-        try { sheet.setName(targetName); } catch(e) {}
-      } else if (existingTarget.getLastRow() <= 1 && sheet.getLastRow() > 1) {
-        try {
-          ss.deleteSheet(existingTarget);
-          sheet.setName(targetName);
-        } catch(e) {}
-      }
-    }
-  });
-}
+    // Active Sub-Tab (Tab 1 to Tab 10)
+    const tabId = targetView;
+    const cfg = TABS_CONFIG.find(t => t.id === tabId) || TABS_CONFIG[0];
+    const meta = state.tabsMeta[tabId] || { name: cfg.defaultName, date: '' };
+    const rowsData = state.tabsData[tabId] || [];
+    const subResult = calculateSubTab(tabId);
 
-function doPost(e) {
-  const lock = LockService.getScriptLock();
-  const hasLock = lock.tryLock(30000);
+    let headers = [];
+    let rows = [];
+    let summary = [];
 
-  if (!hasLock) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: "Server is busy processing another backup. Please try again."
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  try {
-    if (!e || !e.postData || !e.postData.contents) {
-      throw new Error("No payload data received.");
-    }
-
-    const payload = JSON.parse(e.postData.contents);
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    // Ensure all legacy tab names are cleaned immediately
-    renameAllLegacyTabs(ss);
-
-    const action = payload.action || "update";
-    const sessionName = payload.sessionName || "Session 1";
-    const dateStr = payload.date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-    const refNo = payload.refNo || "N/A";
-    const timestamp = payload.timestamp || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
-
-    const sheetList = ["Narration"];
-    for (let i = 1; i <= 10; i++) {
-      sheetList.push("Tab " + i);
-    }
-
-    if (action === "delete") {
-      let deletedCount = 0;
-      sheetList.forEach(sheetName => {
-        const legacyName = sheetName === "Narration" ? "Narration_Backup" : sheetName.replace("Tab ", "Tab_") + "_Backup";
-        const sheet = ss.getSheetByName(sheetName) || ss.getSheetByName(legacyName);
-        if (sheet) {
-          deletedCount += deleteAllBlocksForDate(sheet, dateStr, sessionName);
+    if (cfg.group === 'A') {
+      headers = ['No.', 'Item Name', '2', '3', '4'];
+      rows = rowsData.map((r, idx) => [
+        String(idx + 1),
+        r.col1 || '',
+        r.col2 !== undefined && r.col2 !== null && r.col2 !== '' ? String(r.col2) : '',
+        r.col3 !== undefined && r.col3 !== null && r.col3 !== '' ? String(r.col3) : '',
+        r.col4 !== undefined && r.col4 !== null && r.col4 !== '' ? String(r.col4) : ''
+      ]);
+      summary = [
+        ['', 'Gold Given', subResult.hasData ? formatExact(subResult.totalCol2) : '', '', ''],
+        ['', 'RECD', '', subResult.hasData ? formatExact(subResult.recd) : '', subResult.hasData ? formatExact(subResult.totalCol4) : ''],
+        ['', 'NET LOSS:', '', '', subResult.hasData ? formatExact(subResult.netLoss) : '']
+      ];
+    } else if (cfg.group === 'B') {
+      headers = ['No.', 'Order / Item Name', 'Amount / Value 1', 'Value 2 (Ref)', 'Value 3 (Ref)'];
+      rows = rowsData.map((r, idx) => [
+        String(idx + 1),
+        r.col1 || '',
+        r.col2 !== '' && r.col2 !== undefined ? formatTwoDecimals(r.col2) : '',
+        r.col3 !== '' && r.col3 !== undefined ? formatTwoDecimals(r.col3) : '',
+        r.col4 !== '' && r.col4 !== undefined ? formatTwoDecimals(r.col4) : ''
+      ]);
+      summary = [
+        ['', 'TOTAL', subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '', '', '']
+      ];
+    } else if (cfg.group === 'C') {
+      headers = ['No.', 'DROM / Item Name', 'Input Value A', 'Input Value B', 'Difference'];
+      rows = rowsData.map((r, idx) => {
+        let diffStr = '';
+        if (r.col2 !== '' || r.col3 !== '') {
+          const a = parseSafeNum(r.col2);
+          const b = parseSafeNum(r.col3);
+          diffStr = formatTwoDecimals(roundTwo(a - b));
         }
+        return [
+          String(idx + 1),
+          r.col1 || '',
+          r.col2 !== '' && r.col2 !== undefined ? formatTwoDecimals(r.col2) : '',
+          r.col3 !== '' && r.col3 !== undefined ? formatTwoDecimals(r.col3) : '',
+          diffStr
+        ];
       });
-
-      return ContentService.createTextOutput(JSON.stringify({
-        success: true,
-        action: "delete",
-        message: "Today's backup (" + formatDateForDisplay(dateStr) + " - " + sessionName + ") successfully removed from Google Sheets.",
-        deletedBlocks: deletedCount
-      })).setMimeType(ContentService.MimeType.JSON);
+      summary = [
+        ['', 'TOTAL', subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '', subResult.hasData ? formatTwoDecimals(subResult.totalCol3) : '', subResult.hasData ? formatTwoDecimals(subResult.totalDiff) : '']
+      ];
     }
 
-    const updatedSheets = [];
-
-    if (payload.narration) {
-      const sheetName = "Narration";
-      const sheet = getOrCreateSheet(ss, sheetName, "#d97706");
-      saveModuleBlock(sheet, {
-        action: action,
-        moduleTitle: "Main Narration Stock Reconciliation",
-        dateStr: dateStr,
-        sessionName: sessionName,
-        refNo: refNo,
-        timestamp: timestamp,
-        headers: payload.narration.headers || ["No.", "NARRATION", "RECEIPT", "ISSUE", "BALANCE", "REMARKS"],
-        rows: payload.narration.rows || [],
-        summary: payload.narration.summary || []
-      });
-      updatedSheets.push(sheetName);
-    }
-
-    if (payload.subTabs && Array.isArray(payload.subTabs)) {
-      payload.subTabs.forEach(tab => {
-        const sheetName = "Tab " + tab.num;
-        const sheetColor = tab.group === "A" ? "#ea580c" : (tab.group === "B" ? "#2563eb" : "#0d9488");
-        const sheet = getOrCreateSheet(ss, sheetName, sheetColor);
-
-        saveModuleBlock(sheet, {
-          action: action,
-          moduleTitle: "Sub-Sheet: " + (tab.name || ("Tab " + tab.num)) + " (" + tab.id.toUpperCase() + ")",
-          dateStr: tab.date || dateStr,
-          sessionName: sessionName,
-          refNo: refNo,
-          timestamp: timestamp,
-          headers: tab.headers || ["No.", "Item Name", "2", "3", "4"],
-          rows: tab.rows || [],
-          summary: tab.summary || []
-        });
-        updatedSheets.push(sheetName);
-      });
-    }
-
-    const actionText = action === "append" ? "appended as new session" : "updated & synchronized";
-    return ContentService.createTextOutput(JSON.stringify({
-      success: true,
-      action: action,
-      message: "Backup " + actionText + " for " + formatDateForDisplay(dateStr) + " (" + sessionName + ").",
-      date: dateStr,
-      sessionName: sessionName,
-      refNo: refNo,
-      timestamp: timestamp,
-      updatedSheets: updatedSheets
-    })).setMimeType(ContentService.MimeType.JSON);
-
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: err.message || err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function getOrCreateSheet(ss, name, tabColor) {
-  let sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    // Automatically migrate legacy backup tab names if present
-    const legacyName = name === "Narration" ? "Narration_Backup" : name.replace("Tab ", "Tab_") + "_Backup";
-    const legacySheet = ss.getSheetByName(legacyName);
-    if (legacySheet) {
-      try { legacySheet.setName(name); } catch(e) {}
-      sheet = legacySheet;
-    } else {
-      sheet = ss.insertSheet(name);
-    }
-    if (tabColor) {
-      try { sheet.setTabColor(tabColor); } catch (e) {}
-    }
-  }
-  return sheet;
-}
-
-function saveModuleBlock(sheet, data) {
-  const blockMarker = "[BLOCK_MARKER: DATE=" + data.dateStr + " | SESSION=" + data.sessionName + " | REF=" + data.refNo + "]";
-  const numCols = data.headers.length;
-
-  if (data.action === "update") {
-    const existingRange = findBlockRangeByMarker(sheet, data.dateStr, data.sessionName);
-    if (existingRange) {
-      sheet.deleteRows(existingRange.startRow, existingRange.rowCount);
-    }
-  }
-
-  let insertRow = sheet.getLastRow() + 1;
-  if (insertRow > 1) {
-    insertRow += 1;
-  }
-
-  const blockRows = [];
-  blockRows.push(padRow([blockMarker], numCols));
-  blockRows.push(padRow([
-    "DATE: " + formatDateForDisplay(data.dateStr),
-    "SESSION: " + data.sessionName,
-    "REF NO: " + data.refNo,
-    "MODULE: " + data.moduleTitle,
-    "TIME: " + data.timestamp
-  ], numCols));
-
-  blockRows.push(padRow(data.headers, numCols));
-
-  if (data.rows && data.rows.length > 0) {
-    data.rows.forEach(r => {
-      blockRows.push(padRow(r, numCols));
-    });
-  } else {
-    blockRows.push(padRow(["1", "No entries recorded"], numCols));
-  }
-
-  if (data.summary && data.summary.length > 0) {
-    data.summary.forEach(s => {
-      blockRows.push(padRow(s, numCols));
-    });
-  }
-
-  blockRows.push(padRow(["[END_BLOCK]"], numCols));
-
-  const targetRange = sheet.getRange(insertRow, 1, blockRows.length, numCols);
-  targetRange.setValues(blockRows);
-
-  formatBlock(sheet, insertRow, blockRows.length, numCols, data.rows ? data.rows.length : 1, data.summary ? data.summary.length : 0);
-}
-
-function findBlockRangeByMarker(sheet, dateStr, sessionName) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 1) return null;
-
-  const colA = sheet.getRange(1, 1, lastRow, 1).getValues();
-  let startRow = -1;
-  let endRow = -1;
-
-  for (let i = 0; i < colA.length; i++) {
-    const val = String(colA[i][0]);
-    if (val.indexOf("[BLOCK_MARKER:") === 0 && val.indexOf("DATE=" + dateStr) !== -1 && val.indexOf("SESSION=" + sessionName) !== -1) {
-      startRow = i + 1;
-    } else if (startRow !== -1 && (val === "[END_BLOCK]" || val.indexOf("[BLOCK_MARKER:") === 0)) {
-      endRow = (val === "[END_BLOCK]") ? (i + 1) : i;
-      break;
-    }
-  }
-
-  if (startRow !== -1) {
-    if (endRow === -1) endRow = lastRow;
     return {
-      startRow: startRow,
-      rowCount: (endRow - startRow + 1)
+      title: meta.name || cfg.defaultName,
+      headers,
+      rows,
+      summary
     };
   }
 
-  return null;
-}
+  const escapeHtml = (text) => {
+    const div = document.createElement('div');
+    div.textContent = (text === null || text === undefined) ? '' : String(text);
+    return div.innerHTML;
+  };
 
-function deleteAllBlocksForDate(sheet, dateStr, sessionName) {
-  let count = 0;
-  let attempts = 0;
+  function buildClipboardFormats(tableData) {
+    const allRows = [
+      tableData.headers,
+      ...tableData.rows,
+      ...(tableData.summary || [])
+    ];
 
-  while (attempts < 20) {
-    attempts++;
-    const range = findBlockRangeByDate(sheet, dateStr, sessionName);
-    if (!range) break;
-    sheet.deleteRows(range.startRow, range.rowCount);
-    count++;
-  }
+    // 1. TSV (Tab-separated values for direct Excel and Sheets paste)
+    const tsv = allRows.map(row => {
+      return row.map(cell => {
+        const str = (cell === null || cell === undefined) ? '' : String(cell);
+        return str.replace(/[\t\r\n]+/g, ' ').trim();
+      }).join('\t');
+    }).join('\r\n');
 
-  return count;
-}
+    // 2. Clean HTML Table format
 
-function findBlockRangeByDate(sheet, dateStr, sessionName) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 1) return null;
-
-  const colA = sheet.getRange(1, 1, lastRow, 1).getValues();
-  let startRow = -1;
-  let endRow = -1;
-
-  for (let i = 0; i < colA.length; i++) {
-    const val = String(colA[i][0]);
-    const matchesDate = val.indexOf("[BLOCK_MARKER:") === 0 && val.indexOf("DATE=" + dateStr) !== -1;
-    const matchesSession = !sessionName || val.indexOf("SESSION=" + sessionName) !== -1;
-
-    if (matchesDate && matchesSession) {
-      startRow = i + 1;
-    } else if (startRow !== -1 && (val === "[END_BLOCK]" || val.indexOf("[BLOCK_MARKER:") === 0)) {
-      endRow = (val === "[END_BLOCK]") ? (i + 1) : i;
-      break;
-    }
-  }
-
-  if (startRow !== -1) {
-    if (endRow === -1) endRow = lastRow;
-    return {
-      startRow: startRow,
-      rowCount: (endRow - startRow + 1)
-    };
-  }
-
-  return null;
-}
-
-function formatBlock(sheet, startRow, totalRows, numCols, dataRowsCount, summaryRowsCount) {
-  try {
-    sheet.hideRows(startRow);
-
-    const metaRange = sheet.getRange(startRow + 1, 1, 1, numCols);
-    metaRange.setBackground("#f8fafc")
-             .setFontColor("#0f172a")
-             .setFontWeight("bold")
-             .setFontSize(10)
-             .setBorder(true, true, true, true, false, false, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
-
-    const headerRange = sheet.getRange(startRow + 2, 1, 1, numCols);
-    headerRange.setBackground("#1e293b")
-               .setFontColor("#ffffff")
-               .setFontWeight("bold")
-               .setFontSize(10)
-               .setHorizontalAlignment("center");
-
-    if (numCols >= 2) {
-      sheet.getRange(startRow + 2, 2).setHorizontalAlignment("left");
-    }
-
-    if (dataRowsCount > 0) {
-      const dataStartRow = startRow + 3;
-      const dataRange = sheet.getRange(dataStartRow, 1, dataRowsCount, numCols);
-      dataRange.setFontSize(10)
-               .setBorder(true, true, true, true, true, true, "#e2e8f0", SpreadsheetApp.BorderStyle.SOLID);
-
-      sheet.getRange(dataStartRow, 1, dataRowsCount, 1).setHorizontalAlignment("center");
-      sheet.getRange(dataStartRow, 2, dataRowsCount, 1).setHorizontalAlignment("left");
-      if (numCols > 2) {
-        sheet.getRange(dataStartRow, 3, dataRowsCount, numCols - 2).setHorizontalAlignment("right");
-      }
-    }
-
-    if (summaryRowsCount > 0) {
-      const sumStartRow = startRow + 3 + dataRowsCount;
-      const sumRange = sheet.getRange(sumStartRow, 1, summaryRowsCount, numCols);
-      sumRange.setFontWeight("bold")
-              .setFontSize(10)
-              .setBackground("#f1f5f9")
-              .setBorder(true, true, true, true, true, true, "#94a3b8", SpreadsheetApp.BorderStyle.SOLID);
-
-      if (numCols > 2) {
-        sheet.getRange(sumStartRow, 3, summaryRowsCount, numCols - 2).setHorizontalAlignment("right");
-      }
-    }
-
-    sheet.hideRows(startRow + totalRows - 1);
-
-    for (let c = 1; c <= numCols; c++) {
-      sheet.autoResizeColumn(c);
-      if (sheet.getColumnWidth(c) < 90) {
-        sheet.setColumnWidth(c, c === 2 ? 220 : 110);
-      }
-    }
-  } catch (styleErr) {
-    Logger.log("Formatting notice: " + styleErr.message);
-  }
-}
-
-function padRow(arr, targetLen) {
-  const res = [];
-  for (let i = 0; i < targetLen; i++) {
-    res.push(arr && i < arr.length && arr[i] !== undefined && arr[i] !== null ? String(arr[i]) : "");
-  }
-  return res;
-}
-
-function formatDateForDisplay(dStr) {
-  if (!dStr) return "";
-  const parts = String(dStr).split("-");
-  if (parts.length === 3) {
-    return parts[2] + "/" + parts[1] + "/" + parts[0];
-  }
-  return String(dStr);
-}`;
-
-  function formatDateForDisplay(dStr) {
-    if (!dStr) return '';
-    const parts = String(dStr).split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return String(dStr);
-  }
-
-  function getGoogleSheetsUrl() {
-    return localStorage.getItem(STORAGE_KEYS.GOOGLE_SHEETS_URL) || '';
-  }
-
-  function setGoogleSheetsUrl(url) {
-    const trimmed = (url || '').trim();
-    localStorage.setItem(STORAGE_KEYS.GOOGLE_SHEETS_URL, trimmed);
-    return trimmed;
-  }
-
-  function openGoogleSheetsModal() {
-    if (!googleSheetsModal) return;
-    if (googleSheetsUrlInput) {
-      googleSheetsUrlInput.value = getGoogleSheetsUrl();
-    }
-    googleSheetsModal.classList.remove('hidden');
-    refreshIcons(googleSheetsModal);
-    if (googleSheetsUrlInput) googleSheetsUrlInput.focus();
-  }
-
-  function closeGoogleSheetsModal() {
-    if (!googleSheetsModal) return;
-    googleSheetsModal.classList.add('hidden');
-  }
-
-  // Backup Options Modal (Multi-Session & Versioning)
-  function openBackupOptionsModal() {
-    const url = getGoogleSheetsUrl();
-    if (!url) {
-      openGoogleSheetsModal();
-      return;
-    }
-    if (!backupOptionsModal) return;
-
-    const docDate = state.narration.docDate || docDateInput?.value || new Date().toISOString().split('T')[0];
-    const refNo = state.narration.referenceNo || referenceInput?.value || 'N/A';
-    const displayDate = formatDateForDisplay(docDate);
-
-    if (backupModalSubtext) {
-      backupModalSubtext.textContent = `Date: ${displayDate} | Ref: ${refNo}`;
-    }
-
-    if (backupSessionNameInput && !backupSessionNameInput.value) {
-      backupSessionNameInput.value = 'Session 1';
-    }
-
-    updateActiveSessionChip(backupSessionNameInput?.value || 'Session 1');
-
-    backupOptionsModal.classList.remove('hidden');
-    refreshIcons(backupOptionsModal);
-    if (backupSessionNameInput) backupSessionNameInput.focus();
-  }
-
-  function closeBackupOptionsModal() {
-    if (!backupOptionsModal) return;
-    backupOptionsModal.classList.add('hidden');
-  }
-
-  function updateActiveSessionChip(currentSession) {
-    sessionChipBtns.forEach(btn => {
-      if (btn.getAttribute('data-session') === currentSession) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
+    let html = '<table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;">\n';
+    html += '  <thead>\n    <tr style="background-color:#1e293b;color:#ffffff;font-weight:bold;">\n';
+    tableData.headers.forEach(h => {
+      html += `      <th style="padding:6px 12px;border:1px solid #cbd5e1;text-align:left;">${escapeHtml(h)}</th>\n`;
     });
-  }
+    html += '    </tr>\n  </thead>\n  <tbody>\n';
 
-  sessionChipBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const val = btn.getAttribute('data-session');
-      if (backupSessionNameInput) {
-        backupSessionNameInput.value = val;
-      }
-      updateActiveSessionChip(val);
+    tableData.rows.forEach(r => {
+      html += '    <tr>\n';
+      r.forEach((cell, cIdx) => {
+        const align = (cIdx === 0) ? 'center' : ((cIdx >= 2) ? 'right' : 'left');
+        html += `      <td style="padding:5px 10px;border:1px solid #cbd5e1;text-align:${align};">${escapeHtml(cell)}</td>\n`;
+      });
+      html += '    </tr>\n';
     });
-  });
 
-  if (backupSessionNameInput) {
-    backupSessionNameInput.addEventListener('input', () => {
-      updateActiveSessionChip(backupSessionNameInput.value.trim());
-    });
-  }
+    html += '  </tbody>\n';
 
-  if (backupModalSettingsLinkBtn) {
-    backupModalSettingsLinkBtn.addEventListener('click', () => {
-      closeBackupOptionsModal();
-      openGoogleSheetsModal();
-    });
-  }
-
-  if (openGoogleSheetsSettingsFromOptionsBtn) {
-    openGoogleSheetsSettingsFromOptionsBtn.addEventListener('click', () => {
-      closeBackupOptionsModal();
-      openGoogleSheetsModal();
-    });
-  }
-
-  if (closeBackupOptionsModalBtn) {
-    closeBackupOptionsModalBtn.addEventListener('click', closeBackupOptionsModal);
-  }
-
-  if (backupOptionsModal) {
-    backupOptionsModal.addEventListener('click', (e) => {
-      if (e.target === backupOptionsModal) closeBackupOptionsModal();
-    });
-  }
-
-  if (closeGoogleSheetsModalBtn) {
-    closeGoogleSheetsModalBtn.addEventListener('click', closeGoogleSheetsModal);
-  }
-
-  if (googleSheetsModal) {
-    googleSheetsModal.addEventListener('click', (e) => {
-      if (e.target === googleSheetsModal) closeGoogleSheetsModal();
-    });
-  }
-
-  if (copyScriptCodeBtn) {
-    copyScriptCodeBtn.addEventListener('click', () => {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE).then(() => {
-          showToast('Google Apps Script code copied to clipboard!');
-        }).catch(() => {
-          fallbackCopyText(GOOGLE_APPS_SCRIPT_CODE);
+    if (tableData.summary && tableData.summary.length > 0) {
+      html += '  <tfoot>\n';
+      tableData.summary.forEach(s => {
+        html += '    <tr style="background-color:#f1f5f9;font-weight:bold;">\n';
+        s.forEach((cell, cIdx) => {
+          const align = (cIdx >= 2) ? 'right' : 'left';
+          html += `      <td style="padding:6px 10px;border:1px solid #94a3b8;text-align:${align};">${escapeHtml(cell)}</td>\n`;
         });
-      } else {
-        fallbackCopyText(GOOGLE_APPS_SCRIPT_CODE);
+        html += '    </tr>\n';
+      });
+      html += '  </tfoot>\n';
+    }
+
+    html += '</table>';
+
+    return { tsv, html };
+  }
+
+  async function copyTableToClipboard(targetView, triggerBtn) {
+    try {
+      const data = getFormattedTableData(targetView);
+      const { tsv, html } = buildClipboardFormats(data);
+
+      let success = false;
+      if (navigator.clipboard && window.ClipboardItem) {
+        try {
+          const textBlob = new Blob([tsv], { type: 'text/plain' });
+          const htmlBlob = new Blob([html], { type: 'text/html' });
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'text/plain': textBlob,
+              'text/html': htmlBlob
+            })
+          ]);
+          success = true;
+        } catch (clipErr) {
+          console.warn('ClipboardItem write failed, attempting writeText:', clipErr);
+        }
       }
-    });
+
+      if (!success && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(tsv);
+        success = true;
+      }
+
+      if (!success) {
+        fallbackCopyText(tsv);
+        success = true;
+      }
+
+      showToast(`"${data.title}" copied! Ready to paste into Excel (Ctrl+V)`);
+
+      if (triggerBtn) {
+        triggerBtn.classList.add('copy-success-flash');
+        setTimeout(() => triggerBtn.classList.remove('copy-success-flash'), 600);
+      }
+    } catch (err) {
+      console.error('Failed to copy table:', err);
+      showToast('Could not copy table data to clipboard.');
+    }
   }
 
   function fallbackCopyText(text) {
@@ -2517,297 +2155,397 @@ function formatDateForDisplay(dStr) {
     textArea.select();
     try {
       document.execCommand('copy');
-      showToast('Google Apps Script code copied to clipboard!');
-    } catch (err) {
-      showToast('Could not copy code. Please view google-apps-script.js directly.');
-    }
+    } catch (err) {}
     document.body.removeChild(textArea);
   }
 
-  if (saveGoogleSheetsUrlBtn) {
-    saveGoogleSheetsUrlBtn.addEventListener('click', () => {
-      const url = googleSheetsUrlInput ? googleSheetsUrlInput.value : '';
-      if (!url || !url.startsWith('https://script.google.com/')) {
-        showToast('Please enter a valid Google Apps Script Web App URL.');
-        if (googleSheetsUrlInput) googleSheetsUrlInput.focus();
-        return;
-      }
-      setGoogleSheetsUrl(url);
-      closeGoogleSheetsModal();
-      showToast('Google Sheets URL saved!');
-      openBackupOptionsModal();
+  // --- TABLE CELL RANGE SELECTION ENGINE (Excel / Sheets Multi-Column Drag) ---
+  let activeRangeSelection = null;
+  let isMouseDown = false;
+  let dragStartCoords = null;
+  let isDraggingRange = false;
+
+  function clearCellSelection() {
+    document.querySelectorAll('.ledger-table td.cell-selected').forEach(td => {
+      td.classList.remove('cell-selected');
     });
+    activeRangeSelection = null;
   }
 
-  function setActionCardsLoading(isLoading, targetAction) {
-    const cards = [backupOptionUpdateBtn, backupOptionAppendBtn, backupOptionDeleteBtn].filter(Boolean);
-    cards.forEach(card => {
-      card.disabled = isLoading;
-    });
+  function getCellCoordinates(td) {
+    if (!td || !td.hasAttribute('data-col-idx')) return null;
+    const tr = td.closest('tr');
+    if (!tr) return null;
+    const tbody = tr.parentElement;
+    if (!tbody || tbody.tagName !== 'TBODY') return null;
+    const table = tr.closest('table');
+    if (!table) return null;
 
-    if (targetAction) {
-      const targetCard = targetAction === 'update'
-        ? backupOptionUpdateBtn
-        : (targetAction === 'append' ? backupOptionAppendBtn : backupOptionDeleteBtn);
-
-      if (targetCard) {
-        const iconDiv = targetCard.querySelector('.action-card-icon');
-        if (iconDiv) {
-          if (isLoading) {
-            iconDiv.setAttribute('data-original-html', iconDiv.innerHTML);
-            iconDiv.innerHTML = '<i data-lucide="loader-2" class="spin"></i>';
-          } else {
-            const orig = iconDiv.getAttribute('data-original-html');
-            if (orig) iconDiv.innerHTML = orig;
-          }
-        }
-      }
-    }
-
-    const btns = [headerBackupBtn, backupLedgerBtn].filter(Boolean);
-    btns.forEach(btn => {
-      btn.disabled = isLoading;
-      if (isLoading) {
-        btn.setAttribute('data-original-html', btn.innerHTML);
-        btn.innerHTML = `<i data-lucide="loader-2" class="spin"></i> <span>Saving...</span>`;
-      } else {
-        const orig = btn.getAttribute('data-original-html');
-        if (orig) btn.innerHTML = orig;
-      }
-    });
-
-    refreshIcons();
-  }
-
-  function generateBackupPayload(action = 'update', sessionName = 'Session 1') {
-    const docDate = state.narration.docDate || docDateInput?.value || new Date().toISOString().split('T')[0];
-    const refNo = state.narration.referenceNo || referenceInput?.value || 'N/A';
-    const timestamp = new Date().toLocaleString('en-GB');
-
-    // 1. Narration Table Snapshot
-    const narrationRows = [];
-    // Rows 1-10 (Reserved Sub-Sheet rows)
-    for (let i = 1; i <= 10; i++) {
-      const tabId = `tab${i}`;
-      const cfg = TABS_CONFIG.find(t => t.id === tabId);
-      const meta = state.tabsMeta[tabId] || { name: cfg?.defaultName || `Tab ${i}` };
-      const subResult = calculateSubTab(tabId);
-      const balance = (i <= 5)
-        ? (subResult.hasData ? formatExact(subResult.narrationOutput) : '')
-        : (subResult.hasData ? formatTwoDecimals(subResult.narrationOutput) : '');
-      narrationRows.push([String(i), meta.name, '', '', balance, '']);
-    }
-
-    // Rows 11+ (Manual rows)
-    const manualRows = state.narration.rows || [];
-    manualRows.forEach((r, idx) => {
-      narrationRows.push([
-        String(10 + idx + 1),
-        r.colNarration || '',
-        r.c1 !== '' ? formatTwoDecimals(r.c1) : '',
-        r.c2 !== '' ? formatTwoDecimals(r.c2) : '',
-        r.c3 !== '' ? formatTwoDecimals(r.c3) : '',
-        ''
-      ]);
-    });
-
-    const onHandVal = document.getElementById('onHandStockVal')?.textContent || '';
-    const physicalVal = physicalStockInput?.value !== '' ? formatTwoDecimals(physicalStockInput.value) : '';
-    const diffVal = document.getElementById('differenceVal')?.textContent || '';
-
-    const narrationSummary = [
-      ['', 'ON HAND STOCK', '', '', onHandVal, ''],
-      ['', 'PHYSICAL STOCK', '', '', physicalVal, ''],
-      ['', 'DIFFERENCE', '', '', diffVal, '']
-    ];
-
-    // 2. All 10 Sub-Tabs Snapshots
-    const subTabs = TABS_CONFIG.map(cfg => {
-      const tabId = cfg.id;
-      const meta = state.tabsMeta[tabId] || { name: cfg.defaultName, date: docDate };
-      const rows = state.tabsData[tabId] || [];
-      const subResult = calculateSubTab(tabId);
-
-      let headers = [];
-      let tabRows = [];
-      let summary = [];
-
-      if (cfg.group === 'A') {
-        headers = ['No.', 'Item Name', '2', '3', '4'];
-        tabRows = rows.map((r, idx) => [
-          String(idx + 1),
-          r.col1 || '',
-          r.col2 !== undefined && r.col2 !== null ? String(r.col2) : '',
-          r.col3 !== undefined && r.col3 !== null ? String(r.col3) : '',
-          r.col4 !== undefined && r.col4 !== null ? String(r.col4) : ''
-        ]);
-        summary = [
-          ['', 'Gold Given', subResult.hasData ? formatExact(subResult.totalCol2) : '', '', ''],
-          ['', 'RECD', '', subResult.hasData ? formatExact(subResult.recd) : '', subResult.hasData ? formatExact(subResult.totalCol4) : ''],
-          ['', 'NET LOSS:', '', '', subResult.hasData ? formatExact(subResult.netLoss) : '']
-        ];
-      } else if (cfg.group === 'B') {
-        headers = ['No.', 'Order / Item Name', 'Amount / Value 1', 'Value 2 (Ref)', 'Value 3 (Ref)'];
-        tabRows = rows.map((r, idx) => [
-          String(idx + 1),
-          r.col1 || '',
-          r.col2 !== '' ? formatTwoDecimals(r.col2) : '',
-          r.col3 !== '' ? formatTwoDecimals(r.col3) : '',
-          r.col4 !== '' ? formatTwoDecimals(r.col4) : ''
-        ]);
-        summary = [
-          ['', 'TOTAL', subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '', '', '']
-        ];
-      } else if (cfg.group === 'C') {
-        headers = ['No.', 'DROM / Item Name', 'Input Value A', 'Input Value B', 'Difference'];
-        tabRows = rows.map((r, idx) => {
-          let diffStr = '';
-          if (r.col2 !== '' || r.col3 !== '') {
-            const a = parseSafeNum(r.col2);
-            const b = parseSafeNum(r.col3);
-            diffStr = formatTwoDecimals(roundTwo(a - b));
-          }
-          return [
-            String(idx + 1),
-            r.col1 || '',
-            r.col2 !== '' ? formatTwoDecimals(r.col2) : '',
-            r.col3 !== '' ? formatTwoDecimals(r.col3) : '',
-            diffStr
-          ];
-        });
-        summary = [
-          ['', 'TOTAL', subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '', subResult.hasData ? formatTwoDecimals(subResult.totalCol3) : '', subResult.hasData ? formatTwoDecimals(subResult.totalDiff) : '']
-        ];
-      }
-
-      return {
-        id: tabId,
-        num: cfg.num,
-        name: meta.name || cfg.defaultName,
-        date: meta.date || docDate,
-        group: cfg.group,
-        headers: headers,
-        rows: tabRows,
-        summary: summary
-      };
-    });
+    const rowIdx = Array.from(tbody.children).indexOf(tr);
+    const colIdx = parseInt(td.getAttribute('data-col-idx'), 10);
+    if (rowIdx === -1 || isNaN(colIdx)) return null;
 
     return {
-      action: action,
-      sessionName: sessionName,
-      date: docDate,
-      refNo: refNo,
-      timestamp: timestamp,
-      narration: {
-        headers: ['No.', 'NARRATION', 'RECEIPT', 'ISSUE', 'BALANCE', 'REMARKS'],
-        rows: narrationRows,
-        summary: narrationSummary
-      },
-      subTabs: subTabs
+      table,
+      tableId: table.id,
+      tbody,
+      rowIdx,
+      colIdx,
+      td,
+      tr
     };
   }
 
-  async function executeBackupAction(action) {
-    const url = getGoogleSheetsUrl();
-    if (!url) {
-      closeBackupOptionsModal();
-      openGoogleSheetsModal();
-      return;
-    }
+  function updateRangeHighlight(start, current) {
+    const minRow = Math.min(start.rowIdx, current.rowIdx);
+    const maxRow = Math.max(start.rowIdx, current.rowIdx);
+    const minCol = Math.min(start.colIdx, current.colIdx);
+    const maxCol = Math.max(start.colIdx, current.colIdx);
 
-    const sessionName = (backupSessionNameInput?.value || 'Session 1').trim() || 'Session 1';
+    const table = start.table;
+    const allSelectableTds = table.querySelectorAll('tbody td[data-col-idx]');
+    const selectedCells = [];
 
-    if (action === 'delete') {
-      showConfirmModal(
-        'Delete Backup Session',
-        `Are you sure you want to completely clear today's backup for "${sessionName}" from Google Sheets? Past records will remain intact.`,
-        () => performBackupRequest('delete', sessionName, url)
-      );
-      return;
-    }
+    allSelectableTds.forEach(cell => {
+      const coords = getCellCoordinates(cell);
+      if (coords &&
+          coords.rowIdx >= minRow && coords.rowIdx <= maxRow &&
+          coords.colIdx >= minCol && coords.colIdx <= maxCol) {
+        cell.classList.add('cell-selected');
+        selectedCells.push(cell);
+      } else {
+        cell.classList.remove('cell-selected');
+      }
+    });
 
-    await performBackupRequest(action, sessionName, url);
+    activeRangeSelection = {
+      tableId: start.tableId,
+      minRow,
+      maxRow,
+      minCol,
+      maxCol,
+      cells: selectedCells
+    };
   }
 
-  async function performBackupRequest(action, sessionName, url) {
-    setActionCardsLoading(true, action);
-    const actionLabel = action === 'delete' ? 'Deleting' : (action === 'append' ? 'Appending' : 'Synchronizing');
-    showToast(`${actionLabel} Google Sheets backup...`);
+  // Mouse drag range listeners
+  document.addEventListener('mousedown', (e) => {
+    const td = e.target.closest('td[data-col-idx]');
+    if (!td) {
+      clearCellSelection();
+      return;
+    }
 
-    try {
-      const payload = generateBackupPayload(action, sessionName);
+    const coords = getCellCoordinates(td);
+    if (!coords) return;
 
-      const response = await fetch(url, {
-        method: 'POST',
-        mode: 'cors',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8'
-        },
-        body: JSON.stringify(payload)
+    isMouseDown = true;
+    dragStartCoords = coords;
+    isDraggingRange = false;
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isMouseDown || !dragStartCoords) return;
+
+    const td = e.target.closest('td[data-col-idx]');
+    if (!td) return;
+
+    const coords = getCellCoordinates(td);
+    if (!coords || coords.tableId !== dragStartCoords.tableId) return;
+
+    if (coords.rowIdx !== dragStartCoords.rowIdx || coords.colIdx !== dragStartCoords.colIdx) {
+      isDraggingRange = true;
+      try {
+        window.getSelection()?.removeAllRanges();
+      } catch (err) {}
+      updateRangeHighlight(dragStartCoords, coords);
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDraggingRange && activeRangeSelection && activeRangeSelection.cells.length > 1) {
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+    }
+    isMouseDown = false;
+    dragStartCoords = null;
+    isDraggingRange = false;
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      clearCellSelection();
+    }
+  });
+
+  // Multi-cell selection & Range Copy Handler (Excel / Sheets formatting)
+  document.addEventListener('copy', (e) => {
+    // 1. If multi-cell range selection is active
+    if (activeRangeSelection && activeRangeSelection.cells.length > 0) {
+      const table = document.getElementById(activeRangeSelection.tableId);
+      if (table) {
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const extractedRows = [];
+
+        for (let r = activeRangeSelection.minRow; r <= activeRangeSelection.maxRow; r++) {
+          const tr = rows[r];
+          if (!tr) continue;
+          const rowData = [];
+          for (let c = activeRangeSelection.minCol; c <= activeRangeSelection.maxCol; c++) {
+            const td = tr.querySelector(`td[data-col-idx="${c}"]`);
+            if (td) {
+              const input = td.querySelector('input, textarea');
+              const val = input ? input.value : td.innerText.replace(/\s+/g, ' ').trim();
+              rowData.push(val);
+            } else {
+              rowData.push('');
+            }
+          }
+          extractedRows.push(rowData);
+        }
+
+        if (extractedRows.length > 0) {
+          const tsv = extractedRows.map(r => r.join('\t')).join('\r\n');
+          const htmlTable = '<table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;">' +
+            extractedRows.map(r => '<tr>' + r.map(c => `<td style="padding:5px 10px;border:1px solid #cbd5e1;">${escapeHtml(c)}</td>`).join('') + '</tr>').join('') +
+            '</table>';
+
+          if (e.clipboardData) {
+            e.clipboardData.setData('text/plain', tsv);
+            e.clipboardData.setData('text/html', htmlTable);
+            e.preventDefault();
+            const colCount = activeRangeSelection.maxCol - activeRangeSelection.minCol + 1;
+            showToast(`Copied ${extractedRows.length} row(s) [${colCount} col(s)]! Ready to paste into Excel (Ctrl+V)`);
+            return;
+          }
+        }
+      }
+    }
+
+    // 2. Otherwise check native text selection
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+
+    // If selection is inside an active text input/textarea and not whole table, allow standard single-field copying
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+      if (activeEl.selectionStart !== activeEl.selectionEnd) {
+        return;
+      }
+    }
+
+    const targetTable = currentView === 'narration'
+      ? document.getElementById('reconciliationTable')
+      : document.getElementById('subTabTable');
+
+    if (!targetTable || !targetTable.contains(selection.anchorNode)) return;
+
+    const tableRows = Array.from(targetTable.querySelectorAll('tr'));
+    const selectedRows = tableRows.filter(tr => {
+      try {
+        return selection.containsNode(tr, true);
+      } catch (err) {
+        return false;
+      }
+    });
+
+    if (selectedRows.length === 0) return;
+
+    const extractedData = selectedRows.map(tr => {
+      // Focus on data columns from Narration/Item to Col 4 (exclude row-num and action)
+      const dataCells = Array.from(tr.querySelectorAll('td[data-col-idx]'));
+      if (dataCells.length > 0) {
+        return dataCells.map(cell => {
+          const input = cell.querySelector('input, textarea');
+          if (input) return input.value;
+          return cell.innerText.replace(/\s+/g, ' ').trim();
+        });
+      }
+      const genericCells = Array.from(tr.querySelectorAll('th:not(.col-num-th):not(.no-capture-cell), td:not(.row-num-cell):not(.no-capture-cell)'));
+      return genericCells.map(c => c.innerText.replace(/\s+/g, ' ').trim());
+    });
+
+    if (extractedData.length > 0 && extractedData[0].length > 0) {
+      const tsv = extractedData.map(r => r.join('\t')).join('\r\n');
+      const htmlTable = '<table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;">' +
+        extractedData.map(r => '<tr>' + r.map(c => `<td style="padding:5px 10px;border:1px solid #cbd5e1;">${escapeHtml(c)}</td>`).join('') + '</tr>').join('') +
+        '</table>';
+
+      if (e.clipboardData) {
+        e.clipboardData.setData('text/plain', tsv);
+        e.clipboardData.setData('text/html', htmlTable);
+        e.preventDefault();
+        showToast('Selected table rows copied for Excel!');
+      }
+    }
+  });
+
+  // --- MULTI-LINE SPLIT-PASTE ENGINE (WhatsApp / Excel / Multi-Row Paste) ---
+  document.addEventListener('paste', (e) => {
+    const target = e.target;
+    if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) return;
+
+    // Only apply to table cells inside .ledger-table
+    const table = target.closest('.ledger-table');
+    if (!table) return;
+
+    const clipboardData = e.clipboardData || window.clipboardData;
+    if (!clipboardData) return;
+    const text = clipboardData.getData('text');
+    if (!text || (!text.includes('\n') && !text.includes('\r'))) {
+      return; // Single-line paste: proceed normally with standard browser paste
+    }
+
+    const rawLines = text.split(/\r\n|\r|\n/);
+    const lines = rawLines.map(l => l.trim());
+    // Trim trailing empty lines (e.g. from Excel trailing newline)
+    while (lines.length > 0 && lines[lines.length - 1] === '') {
+      lines.pop();
+    }
+    if (lines.length <= 1) {
+      return; // Only 1 line after trimming: allow default paste
+    }
+
+    e.preventDefault();
+
+    const isSubTabView = currentView.startsWith('tab') || table.id === 'subTabTable';
+
+    if (isSubTabView) {
+      // --- SUB-TAB MULTI-LINE SPLIT-PASTE ---
+      const tabId = currentView.startsWith('tab') ? currentView : 'tab1';
+      const targetTr = target.closest('tr');
+      if (!targetTr || !subTabTableBody) return;
+
+      const allTrs = Array.from(subTabTableBody.querySelectorAll('tr'));
+      const startIdx = allTrs.indexOf(targetTr);
+      if (startIdx === -1) return;
+
+      let targetKey = 'col1'; // default: Item Name / Description
+      if (target.classList.contains('subtab-col-2')) targetKey = 'col2';
+      else if (target.classList.contains('subtab-col-3')) targetKey = 'col3';
+      else if (target.classList.contains('subtab-col-4')) targetKey = 'col4';
+
+      if (!state.tabsData[tabId]) {
+        state.tabsData[tabId] = [];
+      }
+
+      lines.forEach((line, i) => {
+        const rowIdx = startIdx + i;
+        while (rowIdx >= state.tabsData[tabId].length) {
+          state.tabsData[tabId].push({ col1: '', col2: '', col3: '', col4: '' });
+        }
+
+        // Support multi-column TSV if line has tabs (copied from Excel grid)
+        if (line.includes('\t') && targetKey === 'col1') {
+          const parts = line.split('\t').map(p => p.trim());
+          if (parts[0] !== undefined) state.tabsData[tabId][rowIdx].col1 = parts[0];
+          if (parts[1] !== undefined) state.tabsData[tabId][rowIdx].col2 = parts[1];
+          if (parts[2] !== undefined) state.tabsData[tabId][rowIdx].col3 = parts[2];
+          if (parts[3] !== undefined) state.tabsData[tabId][rowIdx].col4 = parts[3];
+        } else {
+          state.tabsData[tabId][rowIdx][targetKey] = line;
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-      }
+      invalidateSubTab(tabId);
+      renderActiveSubTabView();
+      calculateReconciliation(true);
+      flushPendingSync();
+      adjustAllTextareaHeights();
+      showToast(`Pasted ${lines.length} items across rows.`);
 
-      const result = await response.json();
+    } else {
+      // --- NARRATION TABLE MULTI-LINE SPLIT-PASTE ---
+      const targetTr = target.closest('tr');
+      if (!targetTr || !tableBody) return;
 
-      if (result && result.success) {
-        if (action === 'delete') {
-          showToast(result.message || `Today's backup for ${sessionName} deleted successfully.`);
-        } else if (action === 'append') {
-          showToast(`New session appended: Added "${sessionName}" to Google Sheets!`);
-        } else {
-          showToast(`Backup updated: Google Sheet synchronized for "${sessionName}"!`);
+      let allTrs = Array.from(tableBody.querySelectorAll('tr'));
+      const startIdx = allTrs.indexOf(targetTr);
+      if (startIdx === -1) return;
+
+      let colType = 'narration';
+      if (target.classList.contains('col-1')) colType = 'col-1';
+      else if (target.classList.contains('col-2')) colType = 'col-2';
+      else if (target.classList.contains('col-3')) colType = 'col-3';
+
+      let anyTabRenamed = false;
+
+      lines.forEach((line, i) => {
+        const rowIdx = startIdx + i;
+        // If rowIdx exceeds existing rows, dynamically generate extra manual row (Row 11+)
+        while (rowIdx >= allTrs.length) {
+          createManualRowElement({ narration: '', c1: '', c2: '', c3: '' });
+          allTrs = Array.from(tableBody.querySelectorAll('tr'));
         }
-        closeBackupOptionsModal();
-      } else {
-        throw new Error(result?.error || 'Google Sheet operation failed.');
+
+        const tr = allTrs[rowIdx];
+        if (!tr) return;
+
+        if (line.includes('\t') && colType === 'narration') {
+          // Multi-column tab-separated line from Excel
+          const parts = line.split('\t').map(p => p.trim());
+          if (parts[0] !== undefined) {
+            const narrInput = tr.querySelector('.col-narration');
+            if (narrInput) {
+              narrInput.value = parts[0];
+              if (tr.hasAttribute('data-reserved-row')) {
+                const tabId = 'tab' + tr.getAttribute('data-reserved-row');
+                if (state.tabsMeta[tabId]) {
+                  state.tabsMeta[tabId].name = parts[0];
+                  anyTabRenamed = true;
+                }
+              }
+            }
+          }
+          if (parts[1] !== undefined) {
+            const c1 = tr.querySelector('.col-1');
+            if (c1 && !c1.readOnly) c1.value = parts[1];
+          }
+          if (parts[2] !== undefined) {
+            const c2 = tr.querySelector('.col-2');
+            if (c2 && !c2.readOnly) c2.value = parts[2];
+          }
+          if (parts[3] !== undefined) {
+            const c3 = tr.querySelector('.col-3');
+            if (c3 && !c3.readOnly) c3.value = parts[3];
+          }
+        } else {
+          // Single column multi-line text (e.g. WhatsApp list of narrations/items)
+          if (colType === 'narration') {
+            const narrInput = tr.querySelector('.col-narration');
+            if (narrInput) {
+              narrInput.value = line;
+              if (tr.hasAttribute('data-reserved-row')) {
+                const tabId = 'tab' + tr.getAttribute('data-reserved-row');
+                if (state.tabsMeta[tabId]) {
+                  state.tabsMeta[tabId].name = line;
+                  anyTabRenamed = true;
+                }
+              }
+            }
+          } else {
+            const input = tr.querySelector('.' + colType);
+            if (input && !input.readOnly) {
+              input.value = line;
+            }
+          }
+        }
+      });
+
+      if (anyTabRenamed) {
+        updateSidebarTabNames();
       }
 
-    } catch (err) {
-      console.error('Google Sheets Backup Error:', err);
-      showToast(`Backup failed: ${err.message}`);
-      setTimeout(() => {
-        showConfirmModal(
-          'Backup Connection Issue',
-          `Could not connect to Google Sheets (${err.message}). Would you like to check or update your Web App URL?`,
-          () => {
-            closeBackupOptionsModal();
-            openGoogleSheetsModal();
-          }
-        );
-      }, 1000);
-    } finally {
-      setActionCardsLoading(false, action);
+      updateRowIndices();
+      calculateReconciliation(true);
+      saveStateAndSync();
+      flushPendingSync();
+      adjustAllTextareaHeights();
+      showToast(`Pasted ${lines.length} items across rows.`);
     }
-  }
-
-  // Backup Action Button Click Listeners
-  if (backupOptionUpdateBtn) {
-    backupOptionUpdateBtn.addEventListener('click', () => executeBackupAction('update'));
-  }
-
-  if (backupOptionAppendBtn) {
-    backupOptionAppendBtn.addEventListener('click', () => executeBackupAction('append'));
-  }
-
-  if (backupOptionDeleteBtn) {
-    backupOptionDeleteBtn.addEventListener('click', () => executeBackupAction('delete'));
-  }
-
-  // Top header and bottom ledger buttons open the options modal
-  if (headerBackupBtn) {
-    headerBackupBtn.addEventListener('click', () => openBackupOptionsModal());
-  }
-
-  if (backupLedgerBtn) {
-    backupLedgerBtn.addEventListener('click', () => openBackupOptionsModal());
-  }
-
-  if (googleSheetsSettingsBtn) {
-    googleSheetsSettingsBtn.addEventListener('click', openGoogleSheetsModal);
-  }
+  });
 
   // Start Application
   init();
