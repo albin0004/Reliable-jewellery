@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reliable-jewellery-v11';
+const CACHE_NAME = 'reliable-jewellery-v12';
 const ASSETS = [
     './',
     './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
     './icon-512.jpg',
     './firebase-config.js',
     './auth-shield.js',
+    './security-utils.js',
     './login.html',
     './access-denied.html',
     './quotation/index.html',

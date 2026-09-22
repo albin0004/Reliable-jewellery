@@ -4,3 +4,25 @@ Thumbs.db
 *.log
 .vscode
 .idea
+
+# Security & Secrets Prevention
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.pfx
+*.pkcs12
+*.cer
+*.crt
+serviceAccountKey.json
+*firebase-admin*.json
+google-services.json
+*credentials*.json
+secrets.json
+.secrets
+token.json
+*.bak
+*.sql
+*.sqlite
+*.dump

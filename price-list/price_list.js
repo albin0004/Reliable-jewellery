@@ -22,6 +22,7 @@ let currentPerGram = 0;
 let isUnlocked = false;
 let uploadTargetId = null;
 let globalFileInput = null;
+const checkPin = (p) => (typeof SecurityUtils !== 'undefined' && SecurityUtils.verifyPin) ? SecurityUtils.verifyPin(p) : false;
 
 // Preview DOM
 const hoverPreview = document.getElementById('hover-preview');
@@ -291,10 +292,11 @@ function setupInputs() {
             calculatePerGram();
         });
     }
+
     addItemBtn.addEventListener('click', () => {
         if (!isUnlocked) {
             const pin = prompt("Enter PIN to modify list:");
-            if (pin === "7722") {
+            if (checkPin(pin)) {
                 isUnlocked = true;
                 showToast("Editing Unlocked");
             } else {
@@ -340,7 +342,7 @@ function triggerUpload(id) {
 function toggleMasterEdit() {
     if (!isAppEditing) {
         const pin = prompt("Enter PIN to edit table:");
-        if (pin === "7722") {
+        if (checkPin(pin)) {
             isAppEditing = true;
             isUnlocked = true;
             showToast("Edit Mode Active", "success");
@@ -381,7 +383,7 @@ function toggleMasterEdit() {
 function toggleEditOrder() {
     if (!isUnlocked && !isEditingOrder) {
         const pin = prompt("Enter PIN to unlock order editing:");
-        if (pin === "7722") {
+        if (checkPin(pin)) {
             isUnlocked = true;
         } else {
             showToast("Incorrect PIN", "error");
@@ -451,7 +453,7 @@ function requirePin(el) {
     if (!isUnlocked) {
         el.blur();
         const pin = prompt("Enter PIN to unlock editing:");
-        if (pin === "7722") {
+        if (checkPin(pin)) {
             isUnlocked = true;
             showToast("Editing Unlocked", "success");
             el.focus();
@@ -591,7 +593,7 @@ async function manualSave(id) {
 async function uploadImage(id, file) {
     if (!isUnlocked) {
         const pin = prompt("Enter PIN to upload image:");
-        if (pin !== "7722") { return showToast("Incorrect PIN", "error"); }
+        if (!checkPin(pin)) { return showToast("Incorrect PIN", "error"); }
         isUnlocked = true;
     }
 
@@ -643,7 +645,7 @@ function hidePreview() {
 async function deleteItemRow(id) {
     if (!isUnlocked) {
         const pin = prompt("Enter PIN to delete:");
-        if (pin === "7722") {
+        if (checkPin(pin)) {
             isUnlocked = true;
         } else {
             showToast("Incorrect PIN", "error");

@@ -176,12 +176,14 @@ function handleChanges(payload) {
 // Logic
 // ==========================================
 
+const checkPin = (p) => (typeof SecurityUtils !== 'undefined' && SecurityUtils.verifyPin) ? SecurityUtils.verifyPin(p) : false;
+
 function setupInputs() {
     calcDollarInput.addEventListener('input', calculatePerGram);
     addItemBtn.addEventListener('click', () => {
         if (!isUnlocked) {
             const pin = prompt("Enter PIN to modify list:");
-            if (pin === "7722") {
+            if (checkPin(pin)) {
                 isUnlocked = true;
                 showToast("Editing Unlocked");
             } else {
@@ -197,12 +199,13 @@ function requirePin(el) {
     if (!isUnlocked) {
         el.blur();
         const pin = prompt("Enter PIN to unlock editing:");
-        if (pin === "7722") {
+        if (checkPin(pin)) {
             isUnlocked = true;
             showToast("Editing Unlocked", "success");
             el.focus();
         } else {
             showToast("Incorrect PIN", "error");
+            return;
         }
     }
 }
@@ -274,7 +277,7 @@ async function updateItem(id, field, value) {
 async function uploadImage(id, file) {
     if (!isUnlocked) {
         const pin = prompt("Enter PIN to upload image:");
-        if (pin !== "7722") { return showToast("Incorrect PIN", "error"); }
+        if (!checkPin(pin)) { return showToast("Incorrect PIN", "error"); }
         isUnlocked = true;
     }
 
@@ -322,7 +325,7 @@ function hidePreview() {
 async function deleteItemRow(id) {
     if (!isUnlocked) {
         const pin = prompt("Enter PIN to delete:");
-        if (pin === "7722") {
+        if (checkPin(pin)) {
             isUnlocked = true;
         } else {
             showToast("Incorrect PIN", "error");

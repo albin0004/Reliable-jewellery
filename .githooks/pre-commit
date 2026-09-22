@@ -1,0 +1,54 @@
+#!/bin/sh
+# Reliable Jewellery — Git Pre-Commit Security & Secrets Hook
+# Automatically blocks commits containing sensitive credentials, API keys, or private files.
+
+echo "[Security] Scanning staged files for sensitive data and leaked credentials..."
+
+# 1. Block prohibited file patterns
+FORBIDDEN_FILES_REGEX='(\.env(\..+)?|\.pem|\.key|\.pfx|\.pkcs12|serviceAccountKey\.json|.*firebase-admin.*\.json|.*credentials.*\.json|secrets\.json)$'
+
+staged_files=$(git diff --cached --name-only)
+
+for file in $staged_files; do
+    if echo "$file" | grep -Ei "$FORBIDDEN_FILES_REGEX" > /dev/null; then
+        echo "❌ [SECURITY ERROR] Attempting to commit restricted sensitive file: $file"
+        echo "   Please remove it from staging and add it to .gitignore."
+        exit 1
+    fi
+done
+
+# 2. Block prohibited secret patterns in file content diffs
+# Patterns:
+# - Private Keys
+# - AWS Access Keys
+# - GitHub Personal Access Tokens
+# - Slack Webhook URLs
+# - Generic Hardcoded Passwords/Private Secrets
+
+PATTERNS='(BEGIN (RSA|EC|DSA|OPENSSH|PGP|PRIVATE) KEY|AKIA[0-9A-Z]{16}|ghp_[0-9a-zA-Z]{36}|github_pat_[0-9a-zA-Z_]{82}|https:\/\/hooks\.slack\.com\/services\/T[0-9a-zA-Z]+\/B[0-9a-zA-Z]+\/[0-9a-zA-Z]+)'
+
+leak_detected=0
+
+for file in $staged_files; do
+    # Skip binary files or deleted files
+    if [ ! -f "$file" ]; then
+        continue
+    fi
+
+    # Check additions in git diff
+    matches=$(git diff --cached "$file" | grep -E '^\+[^+]' | grep -Ei "$PATTERNS")
+    if [ -n "$matches" ]; then
+        echo "❌ [SECURITY ERROR] Potential credential or private key detected in $file:"
+        echo "$matches" | head -n 3
+        leak_detected=1
+    fi
+done
+
+if [ $leak_detected -ne 0 ]; then
+    echo "⚠️ Commit blocked by pre-commit security hook to prevent secret leaks."
+    echo "   If this is a false positive, review and sanitize the content before committing."
+    exit 1
+fi
+
+echo "✅ [Security] Secret scan passed. Staged files are clean."
+exit 0

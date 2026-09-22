@@ -1299,17 +1299,19 @@ function setupEventListeners() {
         pendingDeleteAction = null;
     };
 
+    const isAuthorizedPin = (val) => (typeof SecurityUtils !== 'undefined' && SecurityUtils.verifyPin) ? SecurityUtils.verifyPin(val) : false;
+
     if (closeSecurityDeleteModal) closeSecurityDeleteModal.addEventListener('click', closeSecModal);
     if (btnCancelSecDel) btnCancelSecDel.addEventListener('click', closeSecModal);
     if (secDelConfirmInput) {
         secDelConfirmInput.addEventListener('input', (e) => {
             const val = e.target.value.trim();
             if (btnConfirmSecDel) {
-                btnConfirmSecDel.disabled = (val !== '7722');
+                btnConfirmSecDel.disabled = !isAuthorizedPin(val);
             }
         });
         secDelConfirmInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && secDelConfirmInput.value.trim() === '7722') {
+            if (e.key === 'Enter' && isAuthorizedPin(secDelConfirmInput.value)) {
                 if (btnConfirmSecDel && !btnConfirmSecDel.disabled) {
                     btnConfirmSecDel.click();
                 }
@@ -1318,7 +1320,7 @@ function setupEventListeners() {
     }
     if (btnConfirmSecDel) {
         btnConfirmSecDel.addEventListener('click', () => {
-            if (secDelConfirmInput && secDelConfirmInput.value.trim() === '7722') {
+            if (secDelConfirmInput && isAuthorizedPin(secDelConfirmInput.value)) {
                 const action = pendingDeleteAction;
                 closeSecModal();
                 if (typeof action === 'function') {

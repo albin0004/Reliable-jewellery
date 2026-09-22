@@ -197,7 +197,11 @@ function setupPasswordGate() {
     if (!pwSubmitBtn) return;
     
     const attemptUnlock = () => {
-        if (pwInput.value === '7722') {
+        const isAuthorized = (typeof SecurityUtils !== 'undefined' && SecurityUtils.verifyPin) 
+            ? SecurityUtils.verifyPin(pwInput.value) 
+            : false;
+
+        if (isAuthorized) {
             isManagerUnlocked = true;
             pwOverlay.classList.add('hidden');
             pwInput.value = '';
