@@ -41,6 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/'/g, '&#039;');
   }
 
+  function isValidTabKey(key) {
+    if (typeof key !== 'string' || !key) return false;
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') return false;
+    return /^tab[a-zA-Z0-9_-]+$/i.test(key);
+  }
+
   // --- Default Initial Tab Configurations & Definitions ---
   // Group A: Tabs 1 to 5 (Metal / Loss Calculation - Exact Decimal Precision)
   // Group B: Tabs 6 to 8 (Order & Weight Tracking - 2-Decimal Precision)
@@ -91,13 +97,14 @@ document.addEventListener('DOMContentLoaded', () => {
       rows11Plus: [] // Manual rows after reserved tab rows
     },
     tabsConfig: tabsConfig,
-    tabsMeta: {}, // { [tabId]: { name: string, date: string, group: string } }
-    tabsData: {}  // { [tabId]: [ { col1, col2, col3, col4 } ] }
+    tabsMeta: Object.create(null), // { [tabId]: { name: string, date: string, group: string } }
+    tabsData: Object.create(null)  // { [tabId]: [ { col1, col2, col3, col4 } ] }
   };
 
   // Initialize Default Tab State
   function initDefaultTabsState() {
     tabsConfig.forEach(cfg => {
+      if (!isValidTabKey(cfg.id)) return;
       if (!state.tabsMeta[cfg.id]) {
         state.tabsMeta[cfg.id] = {
           name: cfg.defaultName,
@@ -1877,11 +1884,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.tabsMeta && typeof data.tabsMeta === 'object') {
       let anyRenamed = false;
       Object.keys(data.tabsMeta).forEach(tId => {
+        if (!isValidTabKey(tId)) return;
+        const incoming = data.tabsMeta[tId];
+        if (!incoming || typeof incoming !== 'object') return;
+
         if (!state.tabsMeta[tId]) {
-          state.tabsMeta[tId] = data.tabsMeta[tId];
+          state.tabsMeta[tId] = {
+            name: typeof incoming.name === 'string' ? incoming.name : '',
+            date: typeof incoming.date === 'string' ? incoming.date : '',
+            group: typeof incoming.group === 'string' ? incoming.group : 'A'
+          };
           anyRenamed = true;
         } else {
-          const incoming = data.tabsMeta[tId];
           if (incoming.name && incoming.name !== state.tabsMeta[tId].name) {
             state.tabsMeta[tId].name = incoming.name;
             anyRenamed = true;
@@ -1909,6 +1923,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. Sub-tabs Data Merge
     if (data.tabsData && typeof data.tabsData === 'object') {
       Object.keys(data.tabsData).forEach(tId => {
+        if (!isValidTabKey(tId)) return;
         const incomingRows = data.tabsData[tId];
         if (!Array.isArray(incomingRows)) return;
 
@@ -2005,17 +2020,34 @@ document.addEventListener('DOMContentLoaded', () => {
       const savedMeta = localStorage.getItem(STORAGE_KEYS.TABS_META) || localStorage.getItem(STORAGE_KEYS.LEGACY_META_V8);
       if (savedMeta) {
         const parsed = JSON.parse(savedMeta);
-        Object.keys(parsed).forEach(k => {
-          state.tabsMeta[k] = parsed[k];
-        });
+        if (parsed && typeof parsed === 'object') {
+          Object.keys(parsed).forEach(k => {
+            if (isValidTabKey(k) && parsed[k] && typeof parsed[k] === 'object') {
+              state.tabsMeta[k] = {
+                name: typeof parsed[k].name === 'string' ? parsed[k].name : '',
+                date: typeof parsed[k].date === 'string' ? parsed[k].date : '',
+                group: typeof parsed[k].group === 'string' ? parsed[k].group : 'A'
+              };
+            }
+          });
+        }
       }
 
       const savedData = localStorage.getItem(STORAGE_KEYS.TABS_DATA) || localStorage.getItem(STORAGE_KEYS.LEGACY_DATA_V8);
       if (savedData) {
         const parsed = JSON.parse(savedData);
-        Object.keys(parsed).forEach(k => {
-          state.tabsData[k] = parsed[k];
-        });
+        if (parsed && typeof parsed === 'object') {
+          Object.keys(parsed).forEach(k => {
+            if (isValidTabKey(k) && Array.isArray(parsed[k])) {
+              state.tabsData[k] = parsed[k].map(r => ({
+                col1: r && r.col1 !== undefined ? String(r.col1) : '',
+                col2: r && r.col2 !== undefined ? String(r.col2) : '',
+                col3: r && r.col3 !== undefined ? String(r.col3) : '',
+                col4: r && r.col4 !== undefined ? String(r.col4) : ''
+              }));
+            }
+          });
+        }
       }
 
       // Ensure all tabs in tabsConfig have initialized meta & data
