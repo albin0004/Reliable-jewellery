@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <!-- Lucide Icons (Pinned for supply chain security) -->
-  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js" crossorigin="anonymous"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- html2canvas for Image Export -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -111,9 +111,6 @@
             </div>
 
             <div class="table-actions" data-html2canvas-ignore="true">
-              <button id="addRowBtn" class="btn btn-secondary btn-sm" title="Add extra row (Row 11+)">
-                <i data-lucide="plus"></i> Add Row
-              </button>
               <button id="resetTableBtn" class="btn btn-outline btn-sm">
                 <i data-lucide="rotate-ccw"></i> Reset
               </button>
@@ -135,34 +132,34 @@
                 </tr>
               </thead>
               <tbody id="tableBody">
-                <!-- Dynamically populated rows (Rows 1-10 reserved for sub-sheets, Row 11+ for manual entries) -->
+                <!-- Dynamically populated rows (Reserved for sub-sheets, followed by manual entries) -->
               </tbody>
               <tfoot>
                 <!-- Bottom Add Extra Row Action -->
-                <tr class="add-row-tr" data-html2canvas-ignore="true">
-                  <td colspan="7" style="padding: 0.5rem 0.75rem; background-color: var(--bg-input);">
+                <tr class="add-row-tr no-copy-row" data-copy-ignore="true" data-html2canvas-ignore="true">
+                  <td colspan="7" class="no-capture-cell" style="padding: 0.5rem 0.75rem; background-color: var(--bg-input);">
                     <button id="addBottomRowBtn" class="btn btn-secondary btn-sm" style="width: 100%; justify-content: center;">
-                      <i data-lucide="plus-circle"></i> Add Extra Row (Row 11+)
+                      <i data-lucide="plus-circle"></i> Add Extra Row
                     </button>
                   </td>
                 </tr>
 
                 <!-- Summary Rows aligned under Column 4 -->
-                <tr class="summary-tr">
-                  <td colspan="5" class="summary-label-cell">ON HAND STOCK</td>
-                  <td class="summary-value-cell" id="onHandStockVal"></td>
+                <tr class="summary-tr" data-summary-row="true">
+                  <td colspan="5" class="summary-label-cell" data-col-idx="1">ON HAND STOCK</td>
+                  <td class="summary-value-cell" id="onHandStockVal" data-col-idx="5"></td>
                   <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
                 </tr>
-                <tr class="summary-tr">
-                  <td colspan="5" class="summary-label-cell">PHYSICAL STOCK</td>
-                  <td class="summary-value-cell input-cell">
-                    <input type="number" id="physicalStockInput" step="0.01" placeholder="" class="summary-table-input">
+                <tr class="summary-tr" data-summary-row="true">
+                  <td colspan="5" class="summary-label-cell" data-col-idx="1">PHYSICAL STOCK</td>
+                  <td class="summary-value-cell input-cell" data-col-idx="5">
+                    <input type="text" inputmode="decimal" id="physicalStockInput" placeholder="" class="summary-table-input">
                   </td>
                   <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
                 </tr>
-                <tr class="summary-tr">
-                  <td colspan="5" class="summary-label-cell">DIFFERENCE</td>
-                  <td class="summary-value-cell" id="differenceVal"></td>
+                <tr class="summary-tr" data-summary-row="true">
+                  <td colspan="5" class="summary-label-cell" data-col-idx="1">DIFFERENCE</td>
+                  <td class="summary-value-cell" id="differenceVal" data-col-idx="5"></td>
                   <td class="no-capture-cell" data-html2canvas-ignore="true"></td>
                 </tr>
               </tfoot>
@@ -171,7 +168,7 @@
 
         </div>
 
-        <!-- VIEW 2: Dynamic Sub-Tab View Panel (Tabs 1 to 10) -->
+        <!-- VIEW 2: Dynamic Sub-Tab View Panel -->
         <div class="table-card view-panel hidden" id="subTabContentArea">
           
           <div class="table-header-row subtab-header-row">
@@ -183,6 +180,7 @@
               <div class="subtab-title-wrapper">
                 <div class="tab-title-edit-container">
                   <h2 id="subTabTitleDisplay" class="subtab-title-text" title="Click or use rename to change name">Tab 1</h2>
+                  <span id="subTabGroupBadge" class="subtab-group-badge badge-a">Group A</span>
                   <button id="editTabNameBtn" class="btn-icon-subtle" title="Rename this tab">
                     <i data-lucide="edit-3"></i>
                   </button>
@@ -205,6 +203,9 @@
               </button>
               <button id="subTabResetBtn" class="btn btn-outline btn-sm reset-tab-btn" title="Reset this tab only">
                 <i data-lucide="rotate-ccw"></i> Reset Tab
+              </button>
+              <button id="subTabDeleteTabBtn" class="btn btn-outline btn-sm delete-tab-btn" title="Delete this tab">
+                <i data-lucide="trash-2"></i> Delete Tab
               </button>
             </div>
           </div>
@@ -248,7 +249,7 @@
       <span id="toastMessage">Action completed successfully</span>
     </div>
 
-    <!-- Generic Confirmation Modal (Delete Row, Reset Tab, Reset Main) -->
+    <!-- Generic Confirmation Modal (Delete Row, Reset Tab, Delete Tab, Reset Main) -->
     <div id="confirmModal" class="modal-overlay hidden" data-html2canvas-ignore="true">
       <div class="modal-card">
         <div class="modal-header">

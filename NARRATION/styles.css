@@ -1395,6 +1395,21 @@ body.is-exporting-image .cell-textarea {
   -webkit-user-select: text;
 }
 
+/* Ensure all summary rows at the bottom are fully selectable and copyable */
+.summary-tr,
+.summary-label-cell,
+.summary-value-cell,
+.summary-table-input {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+/* Strictly exclude bottom Add Extra Row action and control buttons from selection & copy */
+.add-row-tr,
+.add-row-tr td,
+.add-row-tr *,
+#addBottomRowBtn,
+.no-copy-row,
 .no-capture-cell,
 .row-actions-cell,
 .delete-row-btn,
@@ -1432,7 +1447,6 @@ body.is-exporting-image .cell-textarea {
   background-color: rgba(59, 130, 246, 0.22) !important;
   color: #1e3a8a !important;
 }
-
 /* Flash animation on successful copy */
 @keyframes copySuccessFlash {
   0% {
@@ -1448,5 +1462,304 @@ body.is-exporting-image .cell-textarea {
   animation: copySuccessFlash 0.6s ease;
 }
 
+/* ==========================================
+   DYNAMIC TAB SYSTEM & GROUP STYLES
+   ========================================== */
 
+/* Group Badges */
+.group-badge,
+.subtab-group-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 
+.badge-a {
+  background-color: rgba(214, 107, 48, 0.12);
+  color: var(--primary-color);
+  border: 1px solid rgba(214, 107, 48, 0.25);
+}
+
+.badge-b {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.badge-c {
+  background-color: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.subtab-group-badge {
+  margin-left: 0.25rem;
+}
+
+/* Sidebar Group Sections */
+.sidebar-group-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+.sidebar-group-section:first-of-type {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+}
+
+.sidebar-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.4rem 0.25rem 0.4rem;
+  user-select: none;
+  gap: 0.5rem;
+}
+
+.sidebar-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sidebar-group-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  gap: 0.25rem;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.sidebar-group-add-btn i,
+.sidebar-group-add-btn svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.5;
+}
+
+/* Specific Group Colors for Add Buttons */
+.sidebar-group-add-btn.btn-grp-a {
+  color: var(--primary-color);
+}
+.sidebar-group-add-btn.btn-grp-a:hover {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(214, 107, 48, 0.25);
+}
+
+.sidebar-group-add-btn.btn-grp-b {
+  color: #059669;
+}
+.sidebar-group-add-btn.btn-grp-b:hover {
+  background-color: #059669;
+  border-color: #059669;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+}
+
+.sidebar-group-add-btn.btn-grp-c {
+  color: #4f46e5;
+}
+.sidebar-group-add-btn.btn-grp-c:hover {
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
+}
+
+/* Delete Tab Action Button in Subtab Header & Narration */
+.delete-tab-btn {
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.delete-tab-btn:hover {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  border-color: #ef4444 !important;
+}
+
+.reserved-remove-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.reserved-remove-btn:hover {
+  color: var(--accent-rose);
+  background-color: rgba(239, 68, 68, 0.12);
+}
+
+.reserved-remove-btn i,
+.reserved-remove-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* ==========================================
+   ADD TAB MODAL STYLING
+   ========================================== */
+.add-tab-modal-card {
+  max-width: 540px !important;
+  width: 95% !important;
+}
+
+.add-tab-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.add-tab-icon i,
+.add-tab-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.modal-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+
+.modal-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.form-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.form-text-input {
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-input);
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-text-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.group-select-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
+}
+
+.group-option-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+  background-color: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.group-option-card input[type="radio"] {
+  margin-top: 0.25rem;
+  accent-color: var(--primary-color);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.group-option-card:hover {
+  background-color: var(--bg-input);
+  border-color: var(--primary-color);
+}
+
+.group-option-card:has(input[type="radio"]:checked) {
+  border-color: var(--primary-color);
+  background-color: var(--primary-light);
+  box-shadow: 0 2px 8px rgba(214, 107, 48, 0.1);
+}
+
+.group-option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.group-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.group-calc-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.group-desc-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.group-desc-details {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}

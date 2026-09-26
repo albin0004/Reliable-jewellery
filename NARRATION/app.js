@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-  // --- Strict Exact Precision Helpers (Tabs 1 to 5) ---
+  // --- Strict Exact Precision Helpers (Group A: Tabs 1 to 5 + Dynamic Group A) ---
   function cleanFloat(num) {
     if (num === '' || num === null || num === undefined || isNaN(num)) return 0;
     const n = parseFloat(num);
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return String(cleaned);
   }
 
-  // --- Strict 2-Decimal Precision Helpers ---
+  // --- Strict 2-Decimal Precision Helpers (Groups B & C) ---
   function roundTwo(num) {
     if (num === '' || num === null || num === undefined || isNaN(num)) return 0;
     return Math.round((parseFloat(num) + Number.EPSILON) * 100) / 100;
@@ -31,8 +31,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return roundTwo(val);
   }
 
-  // --- Tab Configurations & Definitions ---
-  const TABS_CONFIG = [
+  // --- Default Initial Tab Configurations & Definitions ---
+  // Group A: Tabs 1 to 5 (Metal / Loss Calculation - Exact Decimal Precision)
+  // Group B: Tabs 6 to 8 (Order & Weight Tracking - 2-Decimal Precision)
+  // Group C: Tabs 9 & 10 (DROM / Deduction - 2-Decimal Precision)
+  const DEFAULT_TABS_CONFIG = [
     { id: 'tab1', num: 1, group: 'A', defaultName: 'Tab 1' },
     { id: 'tab2', num: 2, group: 'A', defaultName: 'Tab 2' },
     { id: 'tab3', num: 3, group: 'A', defaultName: 'Tab 3' },
@@ -45,44 +48,63 @@ document.addEventListener('DOMContentLoaded', () => {
     { id: 'tab10', num: 10, group: 'C', defaultName: 'Tab 10' },
   ];
 
+  // Dynamic Tabs Registry
+  let tabsConfig = JSON.parse(JSON.stringify(DEFAULT_TABS_CONFIG));
+
   // Storage Keys
   const STORAGE_KEYS = {
-    ROWS_DATA: 'narration_reconciliation_rows_v8',
-    PHYSICAL_STOCK: 'narration_physical_stock_v8',
-    REFERENCE_NO: 'narration_reference_no_v8',
-    DOC_DATE: 'narration_doc_date_v8',
-    TABS_META: 'narration_tabs_meta_v8',
-    TABS_DATA: 'narration_tabs_data_v8',
+    TABS_CONFIG: 'narration_tabs_config_v9',
+    ROWS_DATA: 'narration_reconciliation_rows_v9',
+    PHYSICAL_STOCK: 'narration_physical_stock_v9',
+    REFERENCE_NO: 'narration_reference_no_v9',
+    DOC_DATE: 'narration_doc_date_v9',
+    TABS_META: 'narration_tabs_meta_v9',
+    TABS_DATA: 'narration_tabs_data_v9',
     // Fallback legacy keys
-    LEGACY_ROWS: 'narration_reconciliation_rows_v7'
+    LEGACY_ROWS_V8: 'narration_reconciliation_rows_v8',
+    LEGACY_META_V8: 'narration_tabs_meta_v8',
+    LEGACY_DATA_V8: 'narration_tabs_data_v8',
+    LEGACY_STOCK_V8: 'narration_physical_stock_v8',
+    LEGACY_REF_V8: 'narration_reference_no_v8',
+    LEGACY_DATE_V8: 'narration_doc_date_v8',
+    LEGACY_ROWS_V7: 'narration_reconciliation_rows_v7'
   };
 
   // --- Global Application State ---
-  let currentView = 'narration'; // 'narration' or 'tab1' ... 'tab10'
+  let currentView = 'narration'; // 'narration' or sub-tab ID
 
   const state = {
     narration: {
       physicalStock: '',
       referenceNo: '',
       docDate: new Date().toISOString().split('T')[0],
-      rows11Plus: [] // Rows after the first 10 reserved rows
+      rows11Plus: [] // Manual rows after reserved tab rows
     },
-    tabsMeta: {}, // { [tabId]: { name: string, date: string } }
+    tabsConfig: tabsConfig,
+    tabsMeta: {}, // { [tabId]: { name: string, date: string, group: string } }
     tabsData: {}  // { [tabId]: [ { col1, col2, col3, col4 } ] }
   };
 
-  // Initialize Default State
-  TABS_CONFIG.forEach(cfg => {
-    state.tabsMeta[cfg.id] = {
-      name: cfg.defaultName,
-      date: new Date().toISOString().split('T')[0]
-    };
-    state.tabsData[cfg.id] = [
-      { col1: '', col2: '', col3: '', col4: '' },
-      { col1: '', col2: '', col3: '', col4: '' },
-      { col1: '', col2: '', col3: '', col4: '' }
-    ];
-  });
+  // Initialize Default Tab State
+  function initDefaultTabsState() {
+    tabsConfig.forEach(cfg => {
+      if (!state.tabsMeta[cfg.id]) {
+        state.tabsMeta[cfg.id] = {
+          name: cfg.defaultName,
+          date: new Date().toISOString().split('T')[0],
+          group: cfg.group
+        };
+      }
+      if (!state.tabsData[cfg.id]) {
+        state.tabsData[cfg.id] = [
+          { col1: '', col2: '', col3: '', col4: '' },
+          { col1: '', col2: '', col3: '', col4: '' },
+          { col1: '', col2: '', col3: '', col4: '' }
+        ];
+      }
+    });
+  }
+  initDefaultTabsState();
 
   // --- DOM Elements ---
   // Narration View Elements
@@ -91,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRowBtn = document.getElementById('addRowBtn');
   const addBottomRowBtn = document.getElementById('addBottomRowBtn');
   const resetTableBtn = document.getElementById('resetTableBtn');
+  const openAddTabModalBtn = document.getElementById('openAddTabModalBtn');
   const onHandStockVal = document.getElementById('onHandStockVal');
   const physicalStockInput = document.getElementById('physicalStockInput');
   const differenceVal = document.getElementById('differenceVal');
@@ -101,12 +124,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const subTabContentArea = document.getElementById('subTabContentArea');
   const subTabBackBtn = document.getElementById('subTabBackBtn');
   const subTabTitleDisplay = document.getElementById('subTabTitleDisplay');
+  const subTabGroupBadge = document.getElementById('subTabGroupBadge');
   const editTabNameBtn = document.getElementById('editTabNameBtn');
   const subTabTitleInput = document.getElementById('subTabTitleInput');
   const subTabDateInput = document.getElementById('subTabDateInput');
   const subTabAddRowBtn = document.getElementById('subTabAddRowBtn');
   const subTabBottomAddRowBtn = document.getElementById('subTabBottomAddRowBtn');
   const subTabResetBtn = document.getElementById('subTabResetBtn');
+  const subTabDeleteTabBtn = document.getElementById('subTabDeleteTabBtn');
   const subTabMetricsArea = document.getElementById('subTabMetricsArea');
   const subTabTableHead = document.getElementById('subTabTableHead');
   const subTabTableBody = document.getElementById('subTabTableBody');
@@ -134,9 +159,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let modalConfirmCallback = null;
 
   // --- Lucide Icons Refresh Helper ---
-  function refreshIcons() {
+  function refreshIcons(container = document) {
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      window.lucide.createIcons();
+      window.lucide.createIcons({ root: container });
     }
   }
 
@@ -181,6 +206,116 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Helper to determine next logical tab number
+  function getNextSequentialTabNumber() {
+    let highestNum = 0;
+    tabsConfig.forEach(t => {
+      if (t.num && t.num > highestNum) highestNum = t.num;
+      const match = (state.tabsMeta[t.id]?.name || t.defaultName || '').match(/Tab\s*(\d+)/i);
+      if (match && parseInt(match[1], 10) > highestNum) {
+        highestNum = parseInt(match[1], 10);
+      }
+    });
+    return Math.max(highestNum + 1, tabsConfig.length + 1);
+  }
+
+  // --- Dynamic Tab Creation Engine ---
+  function createDynamicTab(group = 'A', customName = '') {
+    const validGroup = (group === 'B' || group === 'C') ? group : 'A';
+    const nextNum = getNextSequentialTabNumber();
+    const newId = `tab_${validGroup.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const finalName = customName.trim() || `Tab ${nextNum}`;
+
+    const newTabCfg = {
+      id: newId,
+      num: tabsConfig.length + 1,
+      group: validGroup,
+      defaultName: finalName
+    };
+
+    tabsConfig.push(newTabCfg);
+    state.tabsConfig = tabsConfig;
+
+    // Initialize Tab Metadata
+    state.tabsMeta[newId] = {
+      name: finalName,
+      date: new Date().toISOString().split('T')[0],
+      group: validGroup
+    };
+
+    // Initialize 3 standard empty rows
+    state.tabsData[newId] = [
+      { col1: '', col2: '', col3: '', col4: '' },
+      { col1: '', col2: '', col3: '', col4: '' },
+      { col1: '', col2: '', col3: '', col4: '' }
+    ];
+
+    // Invalidate sub-tab cache
+    invalidateSubTab(newId);
+
+    // Rebuild Narration reserved rows & Sidebar
+    buildReservedRows();
+    buildSidebar();
+    updateRowIndices();
+    calculateReconciliation(true);
+    flushPendingSync();
+
+    // Switch view to the new tab
+    switchView(newId);
+    showToast(`Added "${finalName}" to Group ${validGroup}`);
+
+    return newTabCfg;
+  }
+
+  // --- Dynamic Tab Deletion Engine ---
+  function deleteDynamicTab(tabId) {
+    const tabCfg = tabsConfig.find(t => t.id === tabId);
+    if (!tabCfg) return;
+
+    const tabName = state.tabsMeta[tabId]?.name || tabCfg.defaultName;
+
+    showConfirmModal(
+      `Delete Tab "${tabName}"?`,
+      `Are you sure you want to delete "${tabName}" (Group ${tabCfg.group}) and all its items? This will remove its linked row from the Narration table.`,
+      () => {
+        // Remove from dynamic tabs registry
+        tabsConfig = tabsConfig.filter(t => t.id !== tabId);
+        // Re-index tab numbers
+        tabsConfig.forEach((t, idx) => { t.num = idx + 1; });
+        state.tabsConfig = tabsConfig;
+
+        // Clean up metadata & data
+        delete state.tabsMeta[tabId];
+        delete state.tabsData[tabId];
+        delete subTabCache[tabId];
+        dirtyTabs.delete(tabId);
+
+        // Rebuild Narration reserved rows & sidebar
+        buildReservedRows();
+        buildSidebar();
+        updateRowIndices();
+        calculateReconciliation(true);
+        flushPendingSync();
+
+        // Switch to narration if deleted tab was active
+        if (currentView === tabId) {
+          switchView('narration');
+        }
+
+        showToast(`Tab "${tabName}" deleted.`);
+      }
+    );
+  }
+
+  // Subtab Delete Tab Button Listener
+  if (subTabDeleteTabBtn) {
+    subTabDeleteTabBtn.addEventListener('click', () => {
+      if (currentView.startsWith('tab')) {
+        deleteDynamicTab(currentView);
+      }
+    });
+  }
+
   // --- Auto-size Narration Textareas (Performance Optimized) ---
   let textareaResizeScheduled = false;
   function adjustAllTextareaHeights() {
@@ -204,13 +339,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Memoization & Caching for Subtab Calculations ---
   const subTabCache = {};
-  const dirtyTabs = new Set(TABS_CONFIG.map(t => t.id));
+  const dirtyTabs = new Set();
 
   function invalidateSubTab(tabId) {
     if (tabId) {
       dirtyTabs.add(tabId);
     } else {
-      TABS_CONFIG.forEach(t => dirtyTabs.add(t.id));
+      tabsConfig.forEach(t => dirtyTabs.add(t.id));
     }
   }
 
@@ -223,14 +358,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return subTabCache[tabId];
     }
 
-    const cfg = TABS_CONFIG.find(t => t.id === tabId);
+    const cfg = tabsConfig.find(t => t.id === tabId);
     if (!cfg) return { hasData: false, narrationOutput: '' };
 
     const rows = state.tabsData[tabId] || [];
     let result = { hasData: false, narrationOutput: '' };
 
     if (cfg.group === 'A') {
-      // Group A: Tabs 1 to 5 (Metal / Loss Calculation - Exact Decimal Precision)
+      // Group A: Metal / Loss Calculation - Exact Decimal Precision
       let totalCol2 = 0;
       let totalCol3 = 0;
       let totalCol4 = 0;
@@ -266,7 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
     } else if (cfg.group === 'B') {
-      // Group B: Tabs 6 to 8 (Order & Weight Tracking)
+      // Group B: Order & Weight Tracking - 2-Decimal Precision
       let totalCol2 = 0;
       let hasNumericEntry = false;
 
@@ -285,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
     } else if (cfg.group === 'C') {
-      // Group C: Tabs 9 & 10 (DROM / Deduction)
+      // Group C: DROM / Deduction - 2-Decimal Precision
       let totalCol2 = 0;
       let totalCol3 = 0;
       let totalDiff = 0;
@@ -320,23 +455,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return result;
   }
 
-  // --- Narration Table Reconciliation Calculations (Memoized & High Performance) ---
+  // --- Narration Table Reconciliation Calculations (Dynamic All Tabs) ---
   function calculateReconciliation(triggerSync = true) {
     let totalCol4 = 0;
 
-    // First 10 Reserved Rows (Row 1 to 10)
-    for (let i = 1; i <= 10; i++) {
-      const tabId = `tab${i}`;
+    // All Dynamic Reserved Sub-Tab Rows
+    tabsConfig.forEach((cfg, index) => {
+      const tabId = cfg.id;
       const subResult = calculateSubTab(tabId);
-      const rowEl = tableBody.querySelector(`tr[data-reserved-row="${i}"]`);
+      const rowEl = tableBody.querySelector(`tr[data-reserved-row="${index + 1}"]`);
 
       if (rowEl) {
         const col4Element = rowEl.querySelector('.col-4-display');
         const narrationTextarea = rowEl.querySelector('.col-narration');
 
-        // Sync tab title if not active element
+        // Sync tab title if not actively focused
         if (document.activeElement !== narrationTextarea && narrationTextarea) {
-          const expectedName = state.tabsMeta[tabId]?.name || `Tab ${i}`;
+          const expectedName = state.tabsMeta[tabId]?.name || cfg.defaultName;
           if (narrationTextarea.value !== expectedName) {
             narrationTextarea.value = expectedName;
           }
@@ -345,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sub-tab output into Column 4
         if (subResult.hasData && subResult.narrationOutput !== '') {
           const valNum = parseFloat(subResult.narrationOutput);
-          const formatted = (i <= 5) ? formatExact(subResult.narrationOutput) : formatTwoDecimals(valNum);
+          const formatted = (cfg.group === 'A') ? formatExact(subResult.narrationOutput) : formatTwoDecimals(valNum);
           if (col4Element.textContent !== formatted) {
             col4Element.textContent = formatted;
           }
@@ -359,9 +494,9 @@ document.addEventListener('DOMContentLoaded', () => {
           col4Element.classList.remove('positive', 'negative');
         }
       }
-    }
+    });
 
-    // Rows 11+ (Manual rows)
+    // Rows after reserved tab rows (Manual rows)
     const manualRows = tableBody.querySelectorAll('tr:not([data-reserved-row])');
     manualRows.forEach(row => {
       const c1Input = row.querySelector('.col-1');
@@ -425,37 +560,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Narration Table DOM Builders ---
 
-  // Build the 10 Reserved Rows in Narration Table
+  // Build all Reserved Rows in Narration Table for all configured sub-tabs
   function buildReservedRows() {
-    for (let i = 1; i <= 10; i++) {
-      const tabId = `tab${i}`;
-      const cfg = TABS_CONFIG.find(t => t.id === tabId);
+    // Collect existing manual rows before rebuilding
+    const manualRowsData = [];
+    const manualRowEls = tableBody.querySelectorAll('tr:not([data-reserved-row])');
+    manualRowEls.forEach(row => {
+      const narration = row.querySelector('.col-narration')?.value || '';
+      const c1Raw = row.querySelector('.col-1')?.value || '';
+      const c2Raw = row.querySelector('.col-2')?.value || '';
+      const c3Raw = row.querySelector('.col-3')?.value || '';
+      manualRowsData.push({
+        narration,
+        c1: c1Raw !== '' ? formatTwoDecimals(c1Raw) : '',
+        c2: c2Raw !== '' ? formatTwoDecimals(c2Raw) : '',
+        c3: c3Raw !== '' ? formatTwoDecimals(c3Raw) : ''
+      });
+    });
+
+    tableBody.innerHTML = '';
+
+    tabsConfig.forEach((cfg, index) => {
+      const tabId = cfg.id;
+      const rowNum = index + 1;
       const tabName = state.tabsMeta[tabId]?.name || cfg.defaultName;
 
       const tr = document.createElement('tr');
-      tr.setAttribute('data-reserved-row', i);
+      tr.setAttribute('data-reserved-row', rowNum);
+      tr.setAttribute('data-tab-id', tabId);
       tr.className = 'reserved-tab-row';
 
       tr.innerHTML = `
-        <td class="row-num-cell" data-label="NUMBER">${i}</td>
+        <td class="row-num-cell" data-label="NUMBER">${rowNum}</td>
         <td data-label="NARRATION" data-col-idx="1">
           <div class="reserved-narration-cell">
-            <textarea class="cell-textarea col-narration" rows="1" placeholder="Tab ${i} name...">${tabName}</textarea>
+            <textarea class="cell-textarea col-narration" rows="1" placeholder="${cfg.defaultName}...">${tabName}</textarea>
           </div>
         </td>
         <td data-label="1" data-col-idx="2">
-          <input type="text" class="cell-input col-1 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName}">
+          <input type="text" class="cell-input col-1 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName} (Group ${cfg.group})">
         </td>
         <td data-label="2" data-col-idx="3">
-          <input type="text" class="cell-input col-2 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName}">
+          <input type="text" class="cell-input col-2 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName} (Group ${cfg.group})">
         </td>
         <td data-label="3" data-col-idx="4">
-          <input type="text" class="cell-input col-3 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName}">
+          <input type="text" class="cell-input col-3 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName} (Group ${cfg.group})">
         </td>
         <td class="computed-cell col-4-display reserved-col-4" data-label="4" data-col-idx="5" title="Direct input disabled. Auto-calculated from ${tabName}"></td>
         <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
           <div class="row-actions-cell">
             <button class="delete-row-btn reserved-delete-btn" data-tab-id="${tabId}" title="Clear ${tabName} data">
+              <i data-lucide="eraser"></i>
+            </button>
+            <button class="reserved-remove-btn" data-tab-id="${tabId}" title="Delete Tab ${tabName}">
               <i data-lucide="trash-2"></i>
             </button>
             <button class="reserved-jump-btn" data-jump-tab="${tabId}" title="Open ${tabName}">
@@ -481,7 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
         switchView(tabId);
       });
 
-      // Delete/Clear action button for reserved tab row: clears that tab's data
+      // Clear action button: resets that tab's data entries
       tr.querySelector('.reserved-delete-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         state.tabsData[tabId] = [
@@ -495,14 +652,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentView === tabId) {
           renderActiveSubTabView();
         }
-        showToast(`${tabName} data cleared.`);
+        showToast(`"${tabName}" data cleared.`);
+      });
+
+      // Delete Tab action button
+      tr.querySelector('.reserved-remove-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteDynamicTab(tabId);
       });
 
       tableBody.appendChild(tr);
-    }
+    });
+
+    // Rebuild manual rows
+    manualRowsData.forEach(r => createManualRowElement(r));
+
+    refreshIcons(tableBody);
   }
 
-  // Build Row 11+ (Standard manual row)
+  // Build Manual Row (Row after reserved rows)
   function createManualRowElement(data = { narration: '', c1: '', c2: '', c3: '' }) {
     const tr = document.createElement('tr');
     tr.className = 'manual-row';
@@ -559,7 +727,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     narrationInput.addEventListener('blur', flushPendingSync);
 
-    // Delete row directly and reliably
+    // Delete manual row directly
     tr.querySelector('.manual-delete-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       tr.remove();
@@ -573,7 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshIcons(tr);
   }
 
-  // Re-index all row numbers (1..10 for reserved, 11+ for manual)
+  // Re-index all row numbers
   function updateRowIndices() {
     const rows = tableBody.querySelectorAll('tr');
     rows.forEach((row, index) => {
@@ -588,16 +756,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!currentView.startsWith('tab')) return;
 
     const tabId = currentView;
-    const cfg = TABS_CONFIG.find(t => t.id === tabId);
-    if (!cfg) return;
+    const cfg = tabsConfig.find(t => t.id === tabId);
+    if (!cfg) {
+      switchView('narration');
+      return;
+    }
 
-    const meta = state.tabsMeta[tabId] || { name: cfg.defaultName, date: new Date().toISOString().split('T')[0] };
+    const meta = state.tabsMeta[tabId] || { name: cfg.defaultName, date: new Date().toISOString().split('T')[0], group: cfg.group };
     const rows = state.tabsData[tabId] || [];
 
     // Header Controls
     subTabTitleDisplay.textContent = meta.name;
     subTabTitleInput.value = meta.name;
     subTabDateInput.value = meta.date || new Date().toISOString().split('T')[0];
+
+    // Group Badge
+    if (subTabGroupBadge) {
+      subTabGroupBadge.className = `subtab-group-badge badge-${cfg.group.toLowerCase()}`;
+      subTabGroupBadge.textContent = `Group ${cfg.group}`;
+    }
 
     // Calculate Sub-tab Metrics
     const subResult = calculateSubTab(tabId);
@@ -837,7 +1014,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
       }
 
-      // Input event listeners for immediate recalculation
+      // Input event listeners
       const col1Input = tr.querySelector('.subtab-col-1');
       const col2Input = tr.querySelector('.subtab-col-2');
       const col3Input = tr.querySelector('.subtab-col-3');
@@ -895,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
 
-      // Delete Row Button: deletes intended row and ensures at least 1 row exists
+      // Delete row button
       tr.querySelector('.subtab-delete-row-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         state.tabsData[cfg.id].splice(idx, 1);
@@ -1017,16 +1194,16 @@ document.addEventListener('DOMContentLoaded', () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  // --- Left Sidebar Tab Switcher ---
+  // --- Left Sidebar Tab Switcher (Grouped with Add Tab Buttons) ---
 
   function buildSidebar() {
     if (!sidebarTabsList) return;
     renderSidebarSheetList();
 
     if (mobileSidebarToggleBtn && leftSidebarTabs) {
-      mobileSidebarToggleBtn.addEventListener('click', () => {
+      mobileSidebarToggleBtn.onclick = () => {
         leftSidebarTabs.classList.toggle('expanded-mobile');
-      });
+      };
     }
   }
 
@@ -1034,7 +1211,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!sidebarTabsList) return;
     sidebarTabsList.innerHTML = '';
 
-    // Home Narration Tab Button (Simple, compact list item)
+    // 1. Home Narration Tab Button
     const narrationBtn = document.createElement('button');
     narrationBtn.className = `sidebar-tab-btn ${currentView === 'narration' ? 'active' : ''}`;
     narrationBtn.setAttribute('data-sidebar-id', 'narration');
@@ -1049,40 +1226,76 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     sidebarTabsList.appendChild(narrationBtn);
 
-    // All Ten Tabs (Displayed as a simple, compact list with no group labels)
-    TABS_CONFIG.forEach(cfg => {
-      const meta = state.tabsMeta[cfg.id] || { name: cfg.defaultName };
-      const subResult = calculateSubTab(cfg.id);
+    // Groups A, B, and C definitions
+    const groups = [
+      { key: 'A', name: 'Group A', desc: 'Metal / Loss', badgeClass: 'badge-a' },
+      { key: 'B', name: 'Group B', desc: 'Order & Weight', badgeClass: 'badge-b' },
+      { key: 'C', name: 'Group C', desc: 'DROM / Deduction', badgeClass: 'badge-c' }
+    ];
 
-      const btn = document.createElement('button');
-      btn.className = `sidebar-tab-btn ${currentView === cfg.id ? 'active' : ''}`;
-      btn.setAttribute('data-sidebar-id', cfg.id);
+    groups.forEach(grp => {
+      const grpTabs = tabsConfig.filter(t => t.group === grp.key);
 
-      const valHtml = subResult.narrationOutput ? `<span class="sidebar-tab-val">${subResult.narrationOutput}</span>` : '';
+      const sectionEl = document.createElement('div');
+      sectionEl.className = 'sidebar-group-section';
 
-      btn.innerHTML = `
-        <div class="sidebar-tab-left">
-          <span class="sidebar-dot"></span>
-          <span class="sidebar-tab-name">${meta.name}</span>
+      // Group Header with dedicated + Add Tab button strictly aligned opposite
+      const headerEl = document.createElement('div');
+      headerEl.className = 'sidebar-group-header';
+      headerEl.innerHTML = `
+        <div class="sidebar-group-title">
+          <span class="group-badge ${grp.badgeClass}">${grp.name}</span>
         </div>
-        ${valHtml}
+        <button class="sidebar-group-add-btn btn-grp-${grp.key.toLowerCase()}" title="Add new tab to ${grp.name}" data-group-add="${grp.key}">
+          <i data-lucide="plus"></i>
+          <span>Add Tab</span>
+        </button>
       `;
 
-      btn.addEventListener('click', () => {
-        switchView(cfg.id);
+      headerEl.querySelector('.sidebar-group-add-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        createDynamicTab(grp.key);
       });
 
-      sidebarTabsList.appendChild(btn);
+      sectionEl.appendChild(headerEl);
+
+      // Group Tabs
+      grpTabs.forEach(cfg => {
+        const meta = state.tabsMeta[cfg.id] || { name: cfg.defaultName };
+        const subResult = calculateSubTab(cfg.id);
+
+        const btn = document.createElement('button');
+        btn.className = `sidebar-tab-btn ${currentView === cfg.id ? 'active' : ''}`;
+        btn.setAttribute('data-sidebar-id', cfg.id);
+
+        const valHtml = subResult.narrationOutput ? `<span class="sidebar-tab-val">${subResult.narrationOutput}</span>` : '';
+
+        btn.innerHTML = `
+          <div class="sidebar-tab-left">
+            <span class="sidebar-dot"></span>
+            <span class="sidebar-tab-name">${meta.name}</span>
+          </div>
+          ${valHtml}
+        `;
+
+        btn.addEventListener('click', () => {
+          switchView(cfg.id);
+        });
+
+        sectionEl.appendChild(btn);
+      });
+
+      sidebarTabsList.appendChild(sectionEl);
     });
 
     refreshIcons(sidebarTabsList);
   }
 
-  // High-performance in-place update of sidebar calculated values
+  // In-place update of sidebar calculated values
   function updateSidebarValues() {
     if (!sidebarTabsList) return;
-    for (let i = 0; i < TABS_CONFIG.length; i++) {
-      const cfg = TABS_CONFIG[i];
+    for (let i = 0; i < tabsConfig.length; i++) {
+      const cfg = tabsConfig[i];
       const subResult = calculateSubTab(cfg.id);
       const btn = sidebarTabsList.querySelector(`[data-sidebar-id="${cfg.id}"]`);
       if (btn) {
@@ -1107,8 +1320,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // In-place update of sidebar tab names without DOM recreation
   function updateSidebarTabNames() {
     if (!sidebarTabsList) return;
-    for (let i = 0; i < TABS_CONFIG.length; i++) {
-      const cfg = TABS_CONFIG[i];
+    for (let i = 0; i < tabsConfig.length; i++) {
+      const cfg = tabsConfig[i];
       const btn = sidebarTabsList.querySelector(`[data-sidebar-id="${cfg.id}"]`);
       if (btn) {
         const nameSpan = btn.querySelector('.sidebar-tab-name');
@@ -1147,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Update Narration row narration textarea in-place
-    const cfg = TABS_CONFIG.find(t => t.id === tabId);
+    const cfg = tabsConfig.find(t => t.id === tabId);
     if (cfg) {
       const rowEl = tableBody.querySelector(`tr[data-reserved-row="${cfg.num}"]`);
       if (rowEl) {
@@ -1270,14 +1483,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Narration Action Buttons ---
 
-  // Add Row 11+
+  // Add Manual Row
   const handleAddManualRow = () => {
     createManualRowElement();
     updateRowIndices();
     calculateReconciliation(true);
     flushPendingSync();
     adjustAllTextareaHeights();
-    showToast('Extra row added (Row 11+).');
+    showToast('Extra row added.');
   };
 
   if (addRowBtn) addRowBtn.addEventListener('click', handleAddManualRow);
@@ -1288,7 +1501,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resetTableBtn.addEventListener('click', () => {
       showConfirmModal(
         'Reset Narration Table?',
-        'This will clear manual rows (Row 11+) and reset Document Date, Ref, and Physical Stock. Sub-sheet data will remain safe.',
+        'This will clear manual rows and reset Document Date, Ref, and Physical Stock. Sub-sheet data will remain safe.',
         () => {
           // Remove manual rows
           const manualRows = tableBody.querySelectorAll('tr:not([data-reserved-row])');
@@ -1309,8 +1522,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Narration Document Inputs (Optimistic instant updates with debounced broadcast)
-  physicalStockInput.addEventListener('input', () => calculateReconciliation(true));
+  // Narration Document Inputs
+  physicalStockInput.addEventListener('input', () => {
+    physicalStockInput.value = physicalStockInput.value.replace(/[^0-9.-]/g, '');
+    calculateReconciliation(true);
+  });
   physicalStockInput.addEventListener('blur', () => {
     if (physicalStockInput.value !== '') {
       physicalStockInput.value = formatTwoDecimals(physicalStockInput.value);
@@ -1488,6 +1704,7 @@ document.addEventListener('DOMContentLoaded', () => {
         docDate: docDateInput.value,
         rows11Plus: manualRows
       },
+      tabsConfig: tabsConfig,
       tabsMeta: state.tabsMeta,
       tabsData: state.tabsData,
       lastUpdated: Date.now(),
@@ -1499,8 +1716,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function saveStateAndSync() {
     const payload = getSerializedState();
 
-    // 1. Instant LocalStorage Cache (0ms)
+    // 1. Instant LocalStorage Cache
     try {
+      localStorage.setItem(STORAGE_KEYS.TABS_CONFIG, JSON.stringify(tabsConfig));
       localStorage.setItem(STORAGE_KEYS.PHYSICAL_STOCK, payload.narration.physicalStock);
       localStorage.setItem(STORAGE_KEYS.REFERENCE_NO, payload.narration.referenceNo);
       localStorage.setItem(STORAGE_KEYS.DOC_DATE, payload.narration.docDate);
@@ -1521,7 +1739,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) {}
     }
 
-    // 3. Debounced Multi-Device Network Push (150ms debounce prevents broadcast storms)
+    // 3. Debounced Multi-Device Network Push (150ms debounce)
     clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(() => {
       // Firebase Realtime DB
@@ -1551,7 +1769,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 150);
   }
 
-  // Flush any pending debounced sync immediately (e.g. on blur/action)
+  // Flush any pending debounced sync immediately
   function flushPendingSync() {
     if (syncDebounceTimer) {
       clearTimeout(syncDebounceTimer);
@@ -1613,8 +1831,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Conflict-Resolution Granular State Merger:
-  // Merges incoming remote updates without disrupting the user's active cursor or typing session!
+  // Conflict-Resolution Granular State Merger
   function applyIncomingState(data) {
     if (!data) return;
 
@@ -1629,11 +1846,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const activeEl = document.activeElement;
 
-    // 1. Tab Metadata Merge (Names & Dates)
+    // 1. Tab Configuration Merge (Detect dynamic tabs created or removed remotely)
+    if (Array.isArray(data.tabsConfig) && data.tabsConfig.length > 0) {
+      const currentIds = tabsConfig.map(t => t.id).join(',');
+      const remoteIds = data.tabsConfig.map(t => t.id).join(',');
+      if (currentIds !== remoteIds) {
+        tabsConfig = data.tabsConfig;
+        state.tabsConfig = tabsConfig;
+        buildReservedRows();
+        buildSidebar();
+      }
+    }
+
+    // 2. Tab Metadata Merge (Names & Dates)
     if (data.tabsMeta && typeof data.tabsMeta === 'object') {
       let anyRenamed = false;
       Object.keys(data.tabsMeta).forEach(tId => {
-        if (state.tabsMeta[tId]) {
+        if (!state.tabsMeta[tId]) {
+          state.tabsMeta[tId] = data.tabsMeta[tId];
+          anyRenamed = true;
+        } else {
           const incoming = data.tabsMeta[tId];
           if (incoming.name && incoming.name !== state.tabsMeta[tId].name) {
             state.tabsMeta[tId].name = incoming.name;
@@ -1641,6 +1873,9 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           if (incoming.date) {
             state.tabsMeta[tId].date = incoming.date;
+          }
+          if (incoming.group) {
+            state.tabsMeta[tId].group = incoming.group;
           }
         }
       });
@@ -1656,10 +1891,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // 2. Sub-tabs Data Merge
+    // 3. Sub-tabs Data Merge
     if (data.tabsData && typeof data.tabsData === 'object') {
       Object.keys(data.tabsData).forEach(tId => {
-        if (!state.tabsData[tId]) return;
         const incomingRows = data.tabsData[tId];
         if (!Array.isArray(incomingRows)) return;
 
@@ -1679,9 +1913,9 @@ document.addEventListener('DOMContentLoaded', () => {
           }
 
           if (activeRowIndex === -1 || incomingRows.length !== subRows.length) {
-            // User not typing or row count changed by another device: full update
+            // User not typing or row count changed: full update
             state.tabsData[tId] = incomingRows;
-            renderSubTabTableBody(TABS_CONFIG.find(t => t.id === tId), incomingRows);
+            renderSubTabTableBody(tabsConfig.find(t => t.id === tId) || { group: 'A' }, incomingRows);
           } else {
             // User is typing in activeRowIndex: update other rows without disturbing cursor
             incomingRows.forEach((r, idx) => {
@@ -1705,7 +1939,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // 3. Narration Document & Rows Merge
+    // 4. Narration Document & Rows Merge
     if (data.narration) {
       if (data.narration.physicalStock !== undefined && activeEl !== physicalStockInput) {
         physicalStockInput.value = data.narration.physicalStock !== '' ? formatTwoDecimals(data.narration.physicalStock) : '';
@@ -1722,12 +1956,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // 4. Update UI in-place (no DOM destruction)
+    // 5. Update UI in-place
     if (currentView === 'narration') {
       calculateReconciliation(false);
       adjustAllTextareaHeights();
     } else {
-      const cfg = TABS_CONFIG.find(t => t.id === currentView);
+      const cfg = tabsConfig.find(t => t.id === currentView);
       if (cfg) {
         const subResult = calculateSubTab(currentView);
         updateSubTabMetricValues(cfg, subResult);
@@ -1741,33 +1975,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Initial Application Load ---
   function init() {
-    // 1. Recover tab metadata and data from LocalStorage
+    // 1. Recover tabsConfig from LocalStorage or legacy state
     try {
-      const savedMeta = localStorage.getItem(STORAGE_KEYS.TABS_META);
+      const savedConfig = localStorage.getItem(STORAGE_KEYS.TABS_CONFIG);
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          tabsConfig = parsed;
+          state.tabsConfig = tabsConfig;
+        }
+      }
+
+      // 2. Recover tab metadata and data
+      const savedMeta = localStorage.getItem(STORAGE_KEYS.TABS_META) || localStorage.getItem(STORAGE_KEYS.LEGACY_META_V8);
       if (savedMeta) {
         const parsed = JSON.parse(savedMeta);
         Object.keys(parsed).forEach(k => {
-          if (state.tabsMeta[k]) state.tabsMeta[k] = parsed[k];
+          state.tabsMeta[k] = parsed[k];
         });
       }
 
-      const savedData = localStorage.getItem(STORAGE_KEYS.TABS_DATA);
+      const savedData = localStorage.getItem(STORAGE_KEYS.TABS_DATA) || localStorage.getItem(STORAGE_KEYS.LEGACY_DATA_V8);
       if (savedData) {
         const parsed = JSON.parse(savedData);
         Object.keys(parsed).forEach(k => {
-          if (state.tabsData[k]) state.tabsData[k] = parsed[k];
+          state.tabsData[k] = parsed[k];
         });
       }
 
-      const savedPhysicalStock = localStorage.getItem(STORAGE_KEYS.PHYSICAL_STOCK);
+      // Ensure all tabs in tabsConfig have initialized meta & data
+      initDefaultTabsState();
+
+      // Invalidate calculations
+      tabsConfig.forEach(t => dirtyTabs.add(t.id));
+
+      const savedPhysicalStock = localStorage.getItem(STORAGE_KEYS.PHYSICAL_STOCK) || localStorage.getItem(STORAGE_KEYS.LEGACY_STOCK_V8);
       if (savedPhysicalStock !== null && savedPhysicalStock !== '') {
         physicalStockInput.value = formatTwoDecimals(savedPhysicalStock);
       }
 
-      const savedRefNo = localStorage.getItem(STORAGE_KEYS.REFERENCE_NO);
+      const savedRefNo = localStorage.getItem(STORAGE_KEYS.REFERENCE_NO) || localStorage.getItem(STORAGE_KEYS.LEGACY_REF_V8);
       if (savedRefNo !== null) referenceInput.value = savedRefNo;
 
-      const savedDocDate = localStorage.getItem(STORAGE_KEYS.DOC_DATE);
+      const savedDocDate = localStorage.getItem(STORAGE_KEYS.DOC_DATE) || localStorage.getItem(STORAGE_KEYS.LEGACY_DATE_V8);
       if (savedDocDate !== null) docDateInput.value = savedDocDate;
       else docDateInput.value = new Date().toISOString().split('T')[0];
 
@@ -1775,20 +2025,19 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Error recovering localStorage state:', e);
     }
 
-    // 2. Build the 10 Reserved Rows in Narration Table
+    // 3. Build Reserved Rows in Narration Table for all configured sub-tabs
     buildReservedRows();
 
-    // 3. Load Manual Rows (Row 11+)
+    // 4. Load Manual Rows
     try {
-      const savedManualRows = localStorage.getItem(STORAGE_KEYS.ROWS_DATA);
+      const savedManualRows = localStorage.getItem(STORAGE_KEYS.ROWS_DATA) || localStorage.getItem(STORAGE_KEYS.LEGACY_ROWS_V8);
       if (savedManualRows) {
         const parsed = JSON.parse(savedManualRows);
         if (Array.isArray(parsed) && parsed.length > 0) {
           parsed.forEach(r => createManualRowElement(r));
         }
       } else {
-        // Check legacy rows (v7) migration if exists
-        const legacyRows = localStorage.getItem(STORAGE_KEYS.LEGACY_ROWS);
+        const legacyRows = localStorage.getItem(STORAGE_KEYS.LEGACY_ROWS_V7);
         if (legacyRows) {
           try {
             const parsed = JSON.parse(legacyRows);
@@ -1804,15 +2053,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateRowIndices();
 
-    // 4. Build Navigation Sidebar
+    // 5. Build Navigation Sidebar
     buildSidebar();
 
-    // 5. Calculate reconciliation
+    // 6. Calculate reconciliation
     calculateReconciliation(false);
     adjustAllTextareaHeights();
     refreshIcons();
 
-    // 6. Connect Multi-Device Synchronization (Firebase & Supabase)
+    // 7. Connect Multi-Device Synchronization (Firebase & Supabase)
     initSupabaseSync();
     initFirebaseSync();
   }
@@ -1933,28 +2182,32 @@ document.addEventListener('DOMContentLoaded', () => {
       const headers = ['No.', 'NARRATION', '1', '2', '3', '4'];
       const rows = [];
 
-      // Rows 1-10: Reserved rows
-      for (let i = 1; i <= 10; i++) {
-        const tabId = `tab${i}`;
-        const cfg = TABS_CONFIG.find(t => t.id === tabId);
-        const tabName = state.tabsMeta[tabId]?.name || cfg?.defaultName || `Tab ${i}`;
+      // Reserved rows for all sub-sheets
+      tabsConfig.forEach((cfg, idx) => {
+        const tabId = cfg.id;
+        const tabName = state.tabsMeta[tabId]?.name || cfg.defaultName;
         const subResult = calculateSubTab(tabId);
-        const balance = (i <= 5)
+        const balance = (cfg.group === 'A')
           ? (subResult.hasData ? formatExact(subResult.narrationOutput) : '')
           : (subResult.hasData ? formatTwoDecimals(subResult.narrationOutput) : '');
-        rows.push([String(i), tabName, '', '', '', balance]);
-      }
+        rows.push([String(idx + 1), tabName, '', '', '', balance]);
+      });
 
-      // Rows 11+: Manual rows
-      const manualRows = state.narration.rows || [];
+      // Manual rows
+      const manualRows = tableBody.querySelectorAll('tr:not([data-reserved-row])');
       manualRows.forEach((r, idx) => {
+        const narr = r.querySelector('.col-narration')?.value || '';
+        const c1 = r.querySelector('.col-1')?.value || '';
+        const c2 = r.querySelector('.col-2')?.value || '';
+        const c3 = r.querySelector('.col-3')?.value || '';
+        const c4 = r.querySelector('.col-4-display')?.textContent || '';
         rows.push([
-          String(10 + idx + 1),
-          r.colNarration || '',
-          r.c1 !== '' && r.c1 !== undefined ? formatTwoDecimals(r.c1) : '',
-          r.c2 !== '' && r.c2 !== undefined ? formatTwoDecimals(r.c2) : '',
-          r.c3 !== '' && r.c3 !== undefined ? formatTwoDecimals(r.c3) : '',
-          r.c4 !== '' && r.c4 !== undefined ? formatTwoDecimals(r.c4) : ''
+          String(tabsConfig.length + idx + 1),
+          narr,
+          c1,
+          c2,
+          c3,
+          c4
         ]);
       });
 
@@ -1976,9 +2229,9 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
 
-    // Active Sub-Tab (Tab 1 to Tab 10)
+    // Active Sub-Tab
     const tabId = targetView;
-    const cfg = TABS_CONFIG.find(t => t.id === tabId) || TABS_CONFIG[0];
+    const cfg = tabsConfig.find(t => t.id === tabId) || tabsConfig[0];
     const meta = state.tabsMeta[tabId] || { name: cfg.defaultName, date: '' };
     const rowsData = state.tabsData[tabId] || [];
     const subResult = calculateSubTab(tabId);
@@ -2049,116 +2302,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return div.innerHTML;
   };
 
-  function buildClipboardFormats(tableData) {
-    const allRows = [
-      tableData.headers,
-      ...tableData.rows,
-      ...(tableData.summary || [])
-    ];
-
-    // 1. TSV (Tab-separated values for direct Excel and Sheets paste)
-    const tsv = allRows.map(row => {
-      return row.map(cell => {
-        const str = (cell === null || cell === undefined) ? '' : String(cell);
-        return str.replace(/[\t\r\n]+/g, ' ').trim();
-      }).join('\t');
-    }).join('\r\n');
-
-    // 2. Clean HTML Table format
-
-    let html = '<table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;">\n';
-    html += '  <thead>\n    <tr style="background-color:#1e293b;color:#ffffff;font-weight:bold;">\n';
-    tableData.headers.forEach(h => {
-      html += `      <th style="padding:6px 12px;border:1px solid #cbd5e1;text-align:left;">${escapeHtml(h)}</th>\n`;
-    });
-    html += '    </tr>\n  </thead>\n  <tbody>\n';
-
-    tableData.rows.forEach(r => {
-      html += '    <tr>\n';
-      r.forEach((cell, cIdx) => {
-        const align = (cIdx === 0) ? 'center' : ((cIdx >= 2) ? 'right' : 'left');
-        html += `      <td style="padding:5px 10px;border:1px solid #cbd5e1;text-align:${align};">${escapeHtml(cell)}</td>\n`;
-      });
-      html += '    </tr>\n';
-    });
-
-    html += '  </tbody>\n';
-
-    if (tableData.summary && tableData.summary.length > 0) {
-      html += '  <tfoot>\n';
-      tableData.summary.forEach(s => {
-        html += '    <tr style="background-color:#f1f5f9;font-weight:bold;">\n';
-        s.forEach((cell, cIdx) => {
-          const align = (cIdx >= 2) ? 'right' : 'left';
-          html += `      <td style="padding:6px 10px;border:1px solid #94a3b8;text-align:${align};">${escapeHtml(cell)}</td>\n`;
-        });
-        html += '    </tr>\n';
-      });
-      html += '  </tfoot>\n';
-    }
-
-    html += '</table>';
-
-    return { tsv, html };
-  }
-
-  async function copyTableToClipboard(targetView, triggerBtn) {
-    try {
-      const data = getFormattedTableData(targetView);
-      const { tsv, html } = buildClipboardFormats(data);
-
-      let success = false;
-      if (navigator.clipboard && window.ClipboardItem) {
-        try {
-          const textBlob = new Blob([tsv], { type: 'text/plain' });
-          const htmlBlob = new Blob([html], { type: 'text/html' });
-          await navigator.clipboard.write([
-            new ClipboardItem({
-              'text/plain': textBlob,
-              'text/html': htmlBlob
-            })
-          ]);
-          success = true;
-        } catch (clipErr) {
-          console.warn('ClipboardItem write failed, attempting writeText:', clipErr);
-        }
-      }
-
-      if (!success && navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(tsv);
-        success = true;
-      }
-
-      if (!success) {
-        fallbackCopyText(tsv);
-        success = true;
-      }
-
-      showToast(`"${data.title}" copied! Ready to paste into Excel (Ctrl+V)`);
-
-      if (triggerBtn) {
-        triggerBtn.classList.add('copy-success-flash');
-        setTimeout(() => triggerBtn.classList.remove('copy-success-flash'), 600);
-      }
-    } catch (err) {
-      console.error('Failed to copy table:', err);
-      showToast('Could not copy table data to clipboard.');
-    }
-  }
-
-  function fallbackCopyText(text) {
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.style.position = 'fixed';
-    textArea.style.opacity = '0';
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-      document.execCommand('copy');
-    } catch (err) {}
-    document.body.removeChild(textArea);
-  }
-
   // --- TABLE CELL RANGE SELECTION ENGINE (Excel / Sheets Multi-Column Drag) ---
   let activeRangeSelection = null;
   let isMouseDown = false;
@@ -2172,23 +2315,27 @@ document.addEventListener('DOMContentLoaded', () => {
     activeRangeSelection = null;
   }
 
+  function getTableSelectableRows(table) {
+    if (!table) return [];
+    return Array.from(table.querySelectorAll('tbody tr, tfoot tr:not(.add-row-tr):not(.no-copy-row)'));
+  }
+
   function getCellCoordinates(td) {
     if (!td || !td.hasAttribute('data-col-idx')) return null;
     const tr = td.closest('tr');
-    if (!tr) return null;
-    const tbody = tr.parentElement;
-    if (!tbody || tbody.tagName !== 'TBODY') return null;
+    if (!tr || tr.classList.contains('add-row-tr') || tr.classList.contains('no-copy-row')) return null;
     const table = tr.closest('table');
     if (!table) return null;
 
-    const rowIdx = Array.from(tbody.children).indexOf(tr);
+    const validRows = getTableSelectableRows(table);
+    const rowIdx = validRows.indexOf(tr);
     const colIdx = parseInt(td.getAttribute('data-col-idx'), 10);
     if (rowIdx === -1 || isNaN(colIdx)) return null;
 
     return {
       table,
       tableId: table.id,
-      tbody,
+      validRows,
       rowIdx,
       colIdx,
       td,
@@ -2203,7 +2350,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxCol = Math.max(start.colIdx, current.colIdx);
 
     const table = start.table;
-    const allSelectableTds = table.querySelectorAll('tbody td[data-col-idx]');
+    const allSelectableTds = table.querySelectorAll('tbody td[data-col-idx], tfoot tr:not(.add-row-tr):not(.no-copy-row) td[data-col-idx]');
     const selectedCells = [];
 
     allSelectableTds.forEach(cell => {
@@ -2255,9 +2402,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (coords.rowIdx !== dragStartCoords.rowIdx || coords.colIdx !== dragStartCoords.colIdx) {
       isDraggingRange = true;
-      try {
-        window.getSelection()?.removeAllRanges();
-      } catch (err) {}
       updateRangeHighlight(dragStartCoords, coords);
     }
   });
@@ -2285,13 +2429,32 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeRangeSelection && activeRangeSelection.cells.length > 0) {
       const table = document.getElementById(activeRangeSelection.tableId);
       if (table) {
-        const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const validRows = getTableSelectableRows(table);
         const extractedRows = [];
 
         for (let r = activeRangeSelection.minRow; r <= activeRangeSelection.maxRow; r++) {
-          const tr = rows[r];
-          if (!tr) continue;
+          const tr = validRows[r];
+          if (!tr || tr.classList.contains('add-row-tr') || tr.classList.contains('no-copy-row') || tr.querySelector('#addBottomRowBtn')) continue;
+
+          if (tr.classList.contains('summary-tr')) {
+            const labelCell = tr.querySelector('.summary-label-cell');
+            const valCell = tr.querySelector('.summary-value-cell');
+            const label = labelCell ? labelCell.innerText.replace(/\s+/g, ' ').trim() : '';
+            let val = '';
+            if (valCell) {
+              const input = valCell.querySelector('input');
+              val = input ? input.value : valCell.innerText.replace(/\s+/g, ' ').trim();
+            }
+            const rowData = [];
+            for (let c = activeRangeSelection.minCol; c <= activeRangeSelection.maxCol; c++) {
+              if (c === 1) rowData.push(label);
+              else if (c === 5) rowData.push(val);
+              else rowData.push('');
+            }
+            extractedRows.push(rowData);
+            continue;
+          }
+
           const rowData = [];
           for (let c = activeRangeSelection.minCol; c <= activeRangeSelection.maxCol; c++) {
             const td = tr.querySelector(`td[data-col-idx="${c}"]`);
@@ -2306,10 +2469,14 @@ document.addEventListener('DOMContentLoaded', () => {
           extractedRows.push(rowData);
         }
 
-        if (extractedRows.length > 0) {
-          const tsv = extractedRows.map(r => r.join('\t')).join('\r\n');
+        const cleanExtracted = extractedRows.filter(r => !r.join(' ').toLowerCase().includes('add extra row'));
+
+        if (cleanExtracted.length > 0) {
+          let tsv = cleanExtracted.map(r => r.join('\t')).join('\r\n');
+          tsv = tsv.split(/\r?\n/).filter(line => !line.toLowerCase().includes('add extra row')).join('\r\n');
+
           const htmlTable = '<table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;">' +
-            extractedRows.map(r => '<tr>' + r.map(c => `<td style="padding:5px 10px;border:1px solid #cbd5e1;">${escapeHtml(c)}</td>`).join('') + '</tr>').join('') +
+            cleanExtracted.map(r => '<tr>' + r.map(c => `<td style="padding:5px 10px;border:1px solid #cbd5e1;">${escapeHtml(c)}</td>`).join('') + '</tr>').join('') +
             '</table>';
 
           if (e.clipboardData) {
@@ -2317,18 +2484,17 @@ document.addEventListener('DOMContentLoaded', () => {
             e.clipboardData.setData('text/html', htmlTable);
             e.preventDefault();
             const colCount = activeRangeSelection.maxCol - activeRangeSelection.minCol + 1;
-            showToast(`Copied ${extractedRows.length} row(s) [${colCount} col(s)]! Ready to paste into Excel (Ctrl+V)`);
+            showToast(`Copied ${cleanExtracted.length} row(s) [${colCount} col(s)]! Ready to paste into Excel (Ctrl+V)`);
             return;
           }
         }
       }
     }
 
-    // 2. Otherwise check native text selection
+    // 2. Native text selection
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
 
-    // If selection is inside an active text input/textarea and not whole table, allow standard single-field copying
     const activeEl = document.activeElement;
     if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
       if (activeEl.selectionStart !== activeEl.selectionEnd) {
@@ -2336,13 +2502,38 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    const targetTable = currentView === 'narration'
-      ? document.getElementById('reconciliationTable')
-      : document.getElementById('subTabTable');
+    const recTable = document.getElementById('reconciliationTable');
+    const subTable = document.getElementById('subTabTable');
+    let targetTable = null;
 
-    if (!targetTable || !targetTable.contains(selection.anchorNode)) return;
+    if (recTable && (recTable.contains(selection.anchorNode) || recTable.contains(selection.focusNode) || selection.containsNode(recTable, true))) {
+      targetTable = recTable;
+    } else if (subTable && (subTable.contains(selection.anchorNode) || subTable.contains(selection.focusNode) || selection.containsNode(subTable, true))) {
+      targetTable = subTable;
+    }
 
-    const tableRows = Array.from(targetTable.querySelectorAll('tr'));
+    if (!targetTable) {
+      const rawText = selection.toString();
+      if (rawText.toLowerCase().includes('add extra row')) {
+        const cleaned = rawText.split(/\r?\n/).filter(line => !line.toLowerCase().includes('add extra row')).join('\r\n');
+        if (e.clipboardData) {
+          e.clipboardData.setData('text/plain', cleaned);
+          e.preventDefault();
+        }
+      }
+      return;
+    }
+
+    const tableRows = Array.from(targetTable.querySelectorAll('tr')).filter(tr => {
+      if (tr.classList.contains('add-row-tr') ||
+          tr.classList.contains('no-copy-row') ||
+          tr.hasAttribute('data-copy-ignore') ||
+          tr.querySelector('#addBottomRowBtn')) {
+        return false;
+      }
+      return true;
+    });
+
     const selectedRows = tableRows.filter(tr => {
       try {
         return selection.containsNode(tr, true);
@@ -2354,7 +2545,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (selectedRows.length === 0) return;
 
     const extractedData = selectedRows.map(tr => {
-      // Focus on data columns from Narration/Item to Col 4 (exclude row-num and action)
+      if (tr.classList.contains('summary-tr')) {
+        const labelCell = tr.querySelector('.summary-label-cell');
+        const valCell = tr.querySelector('.summary-value-cell');
+        const label = labelCell ? labelCell.innerText.replace(/\s+/g, ' ').trim() : '';
+        let val = '';
+        if (valCell) {
+          const input = valCell.querySelector('input');
+          val = input ? input.value : valCell.innerText.replace(/\s+/g, ' ').trim();
+        }
+        return [label, '', '', '', val];
+      }
+
       const dataCells = Array.from(tr.querySelectorAll('td[data-col-idx]'));
       if (dataCells.length > 0) {
         return dataCells.map(cell => {
@@ -2367,10 +2569,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return genericCells.map(c => c.innerText.replace(/\s+/g, ' ').trim());
     });
 
-    if (extractedData.length > 0 && extractedData[0].length > 0) {
-      const tsv = extractedData.map(r => r.join('\t')).join('\r\n');
+    const cleanRows = extractedData.filter(r => {
+      if (!r || r.length === 0) return false;
+      if (r.join(' ').toLowerCase().includes('add extra row')) return false;
+      return true;
+    });
+
+    if (cleanRows.length > 0) {
+      let tsv = cleanRows.map(r => r.join('\t')).join('\r\n');
+      tsv = tsv.split(/\r?\n/).filter(line => !line.toLowerCase().includes('add extra row')).join('\r\n');
+
       const htmlTable = '<table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;">' +
-        extractedData.map(r => '<tr>' + r.map(c => `<td style="padding:5px 10px;border:1px solid #cbd5e1;">${escapeHtml(c)}</td>`).join('') + '</tr>').join('') +
+        cleanRows.map(r => '<tr>' + r.map(c => `<td style="padding:5px 10px;border:1px solid #cbd5e1;">${escapeHtml(c)}</td>`).join('') + '</tr>').join('') +
         '</table>';
 
       if (e.clipboardData) {
@@ -2387,7 +2597,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const target = e.target;
     if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) return;
 
-    // Only apply to table cells inside .ledger-table
     const table = target.closest('.ledger-table');
     if (!table) return;
 
@@ -2395,17 +2604,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!clipboardData) return;
     const text = clipboardData.getData('text');
     if (!text || (!text.includes('\n') && !text.includes('\r'))) {
-      return; // Single-line paste: proceed normally with standard browser paste
+      return; // Single-line paste: normal browser paste
     }
 
     const rawLines = text.split(/\r\n|\r|\n/);
     const lines = rawLines.map(l => l.trim());
-    // Trim trailing empty lines (e.g. from Excel trailing newline)
     while (lines.length > 0 && lines[lines.length - 1] === '') {
       lines.pop();
     }
     if (lines.length <= 1) {
-      return; // Only 1 line after trimming: allow default paste
+      return;
     }
 
     e.preventDefault();
@@ -2413,8 +2621,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const isSubTabView = currentView.startsWith('tab') || table.id === 'subTabTable';
 
     if (isSubTabView) {
-      // --- SUB-TAB MULTI-LINE SPLIT-PASTE ---
-      const tabId = currentView.startsWith('tab') ? currentView : 'tab1';
+      // SUB-TAB MULTI-LINE SPLIT-PASTE
+      const tabId = currentView.startsWith('tab') ? currentView : (tabsConfig[0]?.id || 'tab1');
       const targetTr = target.closest('tr');
       if (!targetTr || !subTabTableBody) return;
 
@@ -2422,7 +2630,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const startIdx = allTrs.indexOf(targetTr);
       if (startIdx === -1) return;
 
-      let targetKey = 'col1'; // default: Item Name / Description
+      let targetKey = 'col1';
       if (target.classList.contains('subtab-col-2')) targetKey = 'col2';
       else if (target.classList.contains('subtab-col-3')) targetKey = 'col3';
       else if (target.classList.contains('subtab-col-4')) targetKey = 'col4';
@@ -2437,7 +2645,6 @@ document.addEventListener('DOMContentLoaded', () => {
           state.tabsData[tabId].push({ col1: '', col2: '', col3: '', col4: '' });
         }
 
-        // Support multi-column TSV if line has tabs (copied from Excel grid)
         if (line.includes('\t') && targetKey === 'col1') {
           const parts = line.split('\t').map(p => p.trim());
           if (parts[0] !== undefined) state.tabsData[tabId][rowIdx].col1 = parts[0];
@@ -2457,7 +2664,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(`Pasted ${lines.length} items across rows.`);
 
     } else {
-      // --- NARRATION TABLE MULTI-LINE SPLIT-PASTE ---
+      // NARRATION TABLE MULTI-LINE SPLIT-PASTE
       const targetTr = target.closest('tr');
       if (!targetTr || !tableBody) return;
 
@@ -2474,7 +2681,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       lines.forEach((line, i) => {
         const rowIdx = startIdx + i;
-        // If rowIdx exceeds existing rows, dynamically generate extra manual row (Row 11+)
         while (rowIdx >= allTrs.length) {
           createManualRowElement({ narration: '', c1: '', c2: '', c3: '' });
           allTrs = Array.from(tableBody.querySelectorAll('tr'));
@@ -2484,14 +2690,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tr) return;
 
         if (line.includes('\t') && colType === 'narration') {
-          // Multi-column tab-separated line from Excel
           const parts = line.split('\t').map(p => p.trim());
           if (parts[0] !== undefined) {
             const narrInput = tr.querySelector('.col-narration');
             if (narrInput) {
               narrInput.value = parts[0];
-              if (tr.hasAttribute('data-reserved-row')) {
-                const tabId = 'tab' + tr.getAttribute('data-reserved-row');
+              const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
+              if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
+                const tabId = tabsConfig[reservedIdx - 1].id;
                 if (state.tabsMeta[tabId]) {
                   state.tabsMeta[tabId].name = parts[0];
                   anyTabRenamed = true;
@@ -2512,13 +2718,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (c3 && !c3.readOnly) c3.value = parts[3];
           }
         } else {
-          // Single column multi-line text (e.g. WhatsApp list of narrations/items)
           if (colType === 'narration') {
             const narrInput = tr.querySelector('.col-narration');
             if (narrInput) {
               narrInput.value = line;
-              if (tr.hasAttribute('data-reserved-row')) {
-                const tabId = 'tab' + tr.getAttribute('data-reserved-row');
+              const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
+              if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
+                const tabId = tabsConfig[reservedIdx - 1].id;
                 if (state.tabsMeta[tabId]) {
                   state.tabsMeta[tabId].name = line;
                   anyTabRenamed = true;
