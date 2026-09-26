@@ -47,6 +47,58 @@ document.addEventListener('DOMContentLoaded', () => {
     return /^tab[a-zA-Z0-9_-]+$/i.test(key);
   }
 
+  // --- Safe Tab State Accessors & Mutators (Prototype-free Map Backing) ---
+  function getTabMeta(tabId) {
+    if (!isValidTabKey(tabId)) return null;
+    return state.tabsMeta.get(tabId) || null;
+  }
+
+  function getTabName(tabId, fallback = '') {
+    const meta = getTabMeta(tabId);
+    return (meta && meta.name) ? meta.name : fallback;
+  }
+
+  function setTabMeta(tabId, meta) {
+    if (!isValidTabKey(tabId) || !meta || typeof meta !== 'object') return;
+    state.tabsMeta.set(tabId, {
+      name: typeof meta.name === 'string' ? meta.name : '',
+      date: typeof meta.date === 'string' ? meta.date : '',
+      group: typeof meta.group === 'string' ? meta.group : 'A'
+    });
+  }
+
+  function getTabData(tabId) {
+    if (!isValidTabKey(tabId)) return [];
+    if (!state.tabsData.has(tabId)) {
+      state.tabsData.set(tabId, [
+        { col1: '', col2: '', col3: '', col4: '' },
+        { col1: '', col2: '', col3: '', col4: '' },
+        { col1: '', col2: '', col3: '', col4: '' }
+      ]);
+    }
+    return state.tabsData.get(tabId);
+  }
+
+  function setTabData(tabId, rows) {
+    if (!isValidTabKey(tabId) || !Array.isArray(rows)) return;
+    const sanitizedRows = rows.map(r => ({
+      col1: r && r.col1 !== undefined && r.col1 !== null ? String(r.col1) : '',
+      col2: r && r.col2 !== undefined && r.col2 !== null ? String(r.col2) : '',
+      col3: r && r.col3 !== undefined && r.col3 !== null ? String(r.col3) : '',
+      col4: r && r.col4 !== undefined && r.col4 !== null ? String(r.col4) : ''
+    }));
+    state.tabsData.set(tabId, sanitizedRows);
+  }
+
+  function deleteTabState(tabId) {
+    if (isValidTabKey(tabId)) {
+      state.tabsMeta.delete(tabId);
+      state.tabsData.delete(tabId);
+      subTabCache.delete(tabId);
+      dirtyTabs.delete(tabId);
+    }
+  }
+
   // --- Default Initial Tab Configurations & Definitions ---
   // Group A: Tabs 1 to 5 (Metal / Loss Calculation - Exact Decimal Precision)
   // Group B: Tabs 6 to 8 (Order & Weight Tracking - 2-Decimal Precision)
@@ -97,27 +149,27 @@ document.addEventListener('DOMContentLoaded', () => {
       rows11Plus: [] // Manual rows after reserved tab rows
     },
     tabsConfig: tabsConfig,
-    tabsMeta: Object.create(null), // { [tabId]: { name: string, date: string, group: string } }
-    tabsData: Object.create(null)  // { [tabId]: [ { col1, col2, col3, col4 } ] }
+    tabsMeta: new Map(), // Map<tabId, { name: string, date: string, group: string }>
+    tabsData: new Map()  // Map<tabId, Array<{ col1, col2, col3, col4 }>>
   };
 
   // Initialize Default Tab State
   function initDefaultTabsState() {
     tabsConfig.forEach(cfg => {
       if (!isValidTabKey(cfg.id)) return;
-      if (!state.tabsMeta[cfg.id]) {
-        state.tabsMeta[cfg.id] = {
+      if (!state.tabsMeta.has(cfg.id)) {
+        setTabMeta(cfg.id, {
           name: cfg.defaultName,
           date: new Date().toISOString().split('T')[0],
           group: cfg.group
-        };
+        });
       }
-      if (!state.tabsData[cfg.id]) {
-        state.tabsData[cfg.id] = [
+      if (!state.tabsData.has(cfg.id)) {
+        setTabData(cfg.id, [
           { col1: '', col2: '', col3: '', col4: '' },
           { col1: '', col2: '', col3: '', col4: '' },
           { col1: '', col2: '', col3: '', col4: '' }
-        ];
+        ]);
       }
     });
   }
@@ -227,7 +279,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let highestNum = 0;
     tabsConfig.forEach(t => {
       if (t.num && t.num > highestNum) highestNum = t.num;
-      const match = (state.tabsMeta[t.id]?.name || t.defaultName || '').match(/Tab\s*(\d+)/i);
+      const name = getTabName(t.id, t.defaultName || '');
+      const match = name.match(/Tab\s*(\d+)/i);
       if (match && parseInt(match[1], 10) > highestNum) {
         highestNum = parseInt(match[1], 10);
       }
@@ -253,18 +306,18 @@ document.addEventListener('DOMContentLoaded', () => {
     state.tabsConfig = tabsConfig;
 
     // Initialize Tab Metadata
-    state.tabsMeta[newId] = {
+    setTabMeta(newId, {
       name: finalName,
       date: new Date().toISOString().split('T')[0],
       group: validGroup
-    };
+    });
 
     // Initialize 3 standard empty rows
-    state.tabsData[newId] = [
+    setTabData(newId, [
       { col1: '', col2: '', col3: '', col4: '' },
       { col1: '', col2: '', col3: '', col4: '' },
       { col1: '', col2: '', col3: '', col4: '' }
-    ];
+    ]);
 
     // Invalidate sub-tab cache
     invalidateSubTab(newId);
@@ -288,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabCfg = tabsConfig.find(t => t.id === tabId);
     if (!tabCfg) return;
 
-    const tabName = state.tabsMeta[tabId]?.name || tabCfg.defaultName;
+    const tabName = getTabName(tabId, tabCfg.defaultName);
 
     showConfirmModal(
       `Delete Tab "${tabName}"?`,
@@ -301,10 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.tabsConfig = tabsConfig;
 
         // Clean up metadata & data
-        delete state.tabsMeta[tabId];
-        delete state.tabsData[tabId];
-        subTabCache.delete(tabId);
-        dirtyTabs.delete(tabId);
+        deleteTabState(tabId);
 
         // Rebuild Narration reserved rows & sidebar
         buildReservedRows();
@@ -377,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cfg = tabsConfig.find(t => t.id === tabId);
     if (!cfg) return { hasData: false, narrationOutput: '' };
 
-    const rows = state.tabsData[tabId] || [];
+    const rows = getTabData(tabId);
     let result = { hasData: false, narrationOutput: '' };
 
     if (cfg.group === 'A') {
@@ -487,7 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Sync tab title if not actively focused
         if (document.activeElement !== narrationTextarea && narrationTextarea) {
-          const expectedName = state.tabsMeta[tabId]?.name || cfg.defaultName;
+          const expectedName = getTabName(tabId, cfg.defaultName);
           if (narrationTextarea.value !== expectedName) {
             narrationTextarea.value = expectedName;
           }
@@ -599,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tabsConfig.forEach((cfg, index) => {
       const tabId = cfg.id;
       const rowNum = index + 1;
-      const tabName = state.tabsMeta[tabId]?.name || cfg.defaultName;
+      const tabName = getTabName(tabId, cfg.defaultName);
       const safeTabName = escapeHtml(tabName);
       const safeDefaultName = escapeHtml(cfg.defaultName);
       const safeGroup = escapeHtml(cfg.group);
@@ -661,11 +711,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Clear action button: resets that tab's data entries
       tr.querySelector('.reserved-delete-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        state.tabsData[tabId] = [
+        setTabData(tabId, [
           { col1: '', col2: '', col3: '', col4: '' },
           { col1: '', col2: '', col3: '', col4: '' },
           { col1: '', col2: '', col3: '', col4: '' }
-        ];
+        ]);
         invalidateSubTab(tabId);
         calculateReconciliation(true);
         flushPendingSync();
@@ -783,8 +833,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const meta = state.tabsMeta[tabId] || { name: cfg.defaultName, date: new Date().toISOString().split('T')[0], group: cfg.group };
-    const rows = state.tabsData[tabId] || [];
+    const meta = getTabMeta(tabId) || { name: cfg.defaultName, date: new Date().toISOString().split('T')[0], group: cfg.group };
+    const rows = getTabData(tabId);
 
     // Header Controls
     subTabTitleDisplay.textContent = meta.name;
@@ -886,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (cfg.group === 'B') {
       const entries = document.getElementById('metricItemEntriesVal');
       const totalCol2 = document.getElementById('metricTotalCol2Val');
-      if (entries) entries.textContent = state.tabsData[cfg.id]?.length || 0;
+      if (entries) entries.textContent = getTabData(cfg.id).length;
       if (totalCol2) totalCol2.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '—';
     } else if (cfg.group === 'C') {
       const totalA = document.getElementById('metricTotalAVal');
@@ -1043,12 +1093,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const col4Input = tr.querySelector('.subtab-col-4');
 
       const handleCellInput = () => {
-        state.tabsData[cfg.id][idx] = {
-          col1: col1Input?.value || '',
-          col2: col2Input?.value || '',
-          col3: col3Input?.value || '',
-          col4: col4Input ? col4Input.value : ''
-        };
+        const tabRows = getTabData(cfg.id);
+        if (tabRows && tabRows[idx]) {
+          tabRows[idx].col1 = col1Input?.value || '';
+          tabRows[idx].col2 = col2Input?.value || '';
+          tabRows[idx].col3 = col3Input?.value || '';
+          tabRows[idx].col4 = col4Input ? col4Input.value : '';
+        }
 
         invalidateSubTab(cfg.id);
 
@@ -1097,9 +1148,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // Delete row button
       tr.querySelector('.subtab-delete-row-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        state.tabsData[cfg.id].splice(idx, 1);
-        if (state.tabsData[cfg.id].length === 0) {
-          state.tabsData[cfg.id].push({ col1: '', col2: '', col3: '', col4: '' });
+        const tabRows = getTabData(cfg.id);
+        tabRows.splice(idx, 1);
+        if (tabRows.length === 0) {
+          tabRows.push({ col1: '', col2: '', col3: '', col4: '' });
         }
         invalidateSubTab(cfg.id);
         renderActiveSubTabView();
@@ -1283,7 +1335,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Group Tabs
       grpTabs.forEach(cfg => {
-        const meta = state.tabsMeta[cfg.id] || { name: cfg.defaultName };
+        const meta = getTabMeta(cfg.id) || { name: cfg.defaultName };
         const subResult = calculateSubTab(cfg.id);
 
         const btn = document.createElement('button');
@@ -1347,7 +1399,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const btn = sidebarTabsList.querySelector(`[data-sidebar-id="${cfg.id}"]`);
       if (btn) {
         const nameSpan = btn.querySelector('.sidebar-tab-name');
-        const name = state.tabsMeta[cfg.id]?.name || cfg.defaultName;
+        const name = getTabName(cfg.id, cfg.defaultName);
         if (nameSpan && nameSpan.textContent !== name) {
           nameSpan.textContent = name;
         }
@@ -1371,9 +1423,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Renaming Tabs (Global Sync) ---
 
   function renameTab(tabId, newName) {
-    if (!newName || !state.tabsMeta[tabId]) return;
+    if (!isValidTabKey(tabId) || !newName) return;
+    const meta = getTabMeta(tabId);
+    if (!meta) return;
 
-    state.tabsMeta[tabId].name = newName;
+    meta.name = newName;
+    setTabMeta(tabId, meta);
 
     // Update subtab header if active
     if (currentView === tabId) {
@@ -1409,7 +1464,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const commitHeaderRename = () => {
-      const newName = subTabTitleInput.value.trim() || state.tabsMeta[currentView]?.name;
+      const currentMeta = getTabMeta(currentView);
+      const newName = subTabTitleInput.value.trim() || (currentMeta ? currentMeta.name : '');
       renameTab(currentView, newName);
       subTabTitleInput.classList.add('hidden');
       subTabTitleDisplay.classList.remove('hidden');
@@ -1420,7 +1476,8 @@ document.addEventListener('DOMContentLoaded', () => {
     subTabTitleInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') commitHeaderRename();
       else if (e.key === 'Escape') {
-        subTabTitleInput.value = state.tabsMeta[currentView]?.name;
+        const currentMeta = getTabMeta(currentView);
+        subTabTitleInput.value = currentMeta ? currentMeta.name : '';
         subTabTitleInput.classList.add('hidden');
         subTabTitleDisplay.classList.remove('hidden');
       }
@@ -1431,8 +1488,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (subTabDateInput) {
     subTabDateInput.addEventListener('input', () => {
       if (currentView.startsWith('tab')) {
-        state.tabsMeta[currentView].date = subTabDateInput.value;
-        saveStateAndSync();
+        const meta = getTabMeta(currentView);
+        if (meta) {
+          meta.date = subTabDateInput.value;
+          setTabMeta(currentView, meta);
+          saveStateAndSync();
+        }
       }
     });
   }
@@ -1441,10 +1502,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleAddSubTabRow() {
     if (!currentView.startsWith('tab')) return;
     const tabId = currentView;
-    if (!state.tabsData[tabId]) {
-      state.tabsData[tabId] = [];
-    }
-    state.tabsData[tabId].push({ col1: '', col2: '', col3: '', col4: '' });
+    const tabRows = getTabData(tabId);
+    tabRows.push({ col1: '', col2: '', col3: '', col4: '' });
     invalidateSubTab(tabId);
     renderActiveSubTabView();
     calculateReconciliation(true);
@@ -1476,18 +1535,18 @@ document.addEventListener('DOMContentLoaded', () => {
   if (subTabResetBtn) {
     subTabResetBtn.addEventListener('click', () => {
       if (!currentView.startsWith('tab')) return;
-      const meta = state.tabsMeta[currentView];
+      const meta = getTabMeta(currentView);
       const tabName = meta?.name || 'this sub-sheet';
 
       showConfirmModal(
         `Reset ${tabName}?`,
         `This action will clear all row entries in "${tabName}" without affecting other tabs or the main Narration sheet.`,
         () => {
-          state.tabsData[currentView] = [
+          setTabData(currentView, [
             { col1: '', col2: '', col3: '', col4: '' },
             { col1: '', col2: '', col3: '', col4: '' },
             { col1: '', col2: '', col3: '', col4: '' }
-          ];
+          ]);
           invalidateSubTab(currentView);
           renderActiveSubTabView();
           calculateReconciliation(true);
@@ -1727,8 +1786,8 @@ document.addEventListener('DOMContentLoaded', () => {
         rows11Plus: manualRows
       },
       tabsConfig: tabsConfig,
-      tabsMeta: state.tabsMeta,
-      tabsData: state.tabsData,
+      tabsMeta: Object.fromEntries(state.tabsMeta),
+      tabsData: Object.fromEntries(state.tabsData),
       lastUpdated: Date.now(),
       deviceId: syncDeviceId
     };
@@ -1887,31 +1946,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isValidTabKey(tId)) return;
         const incoming = data.tabsMeta[tId];
         if (!incoming || typeof incoming !== 'object') return;
+        const existing = getTabMeta(tId);
 
-        if (!state.tabsMeta[tId]) {
-          state.tabsMeta[tId] = {
-            name: typeof incoming.name === 'string' ? incoming.name : '',
-            date: typeof incoming.date === 'string' ? incoming.date : '',
-            group: typeof incoming.group === 'string' ? incoming.group : 'A'
-          };
+        if (!existing) {
+          setTabMeta(tId, incoming);
           anyRenamed = true;
         } else {
-          if (incoming.name && incoming.name !== state.tabsMeta[tId].name) {
-            state.tabsMeta[tId].name = incoming.name;
+          if (incoming.name && incoming.name !== existing.name) {
+            existing.name = incoming.name;
             anyRenamed = true;
           }
-          if (incoming.date) {
-            state.tabsMeta[tId].date = incoming.date;
-          }
-          if (incoming.group) {
-            state.tabsMeta[tId].group = incoming.group;
-          }
+          if (incoming.date) existing.date = incoming.date;
+          if (incoming.group) existing.group = incoming.group;
+          setTabMeta(tId, existing);
         }
       });
       if (anyRenamed) {
         updateSidebarTabNames();
         if (currentView.startsWith('tab')) {
-          const meta = state.tabsMeta[currentView];
+          const meta = getTabMeta(currentView);
           if (meta && subTabTitleDisplay && activeEl !== subTabTitleInput) {
             subTabTitleDisplay.textContent = meta.name;
             subTabTitleInput.value = meta.name;
@@ -1932,7 +1985,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (tId !== currentView) {
           // Tab is not currently open: update in background
-          state.tabsData[tId] = incomingRows;
+          setTabData(tId, incomingRows);
         } else {
           // Tab is currently open! Check if user is actively typing in a row
           const subRows = Array.from(subTabTableBody.querySelectorAll('tr'));
@@ -1944,13 +1997,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
           if (activeRowIndex === -1 || incomingRows.length !== subRows.length) {
             // User not typing or row count changed: full update
-            state.tabsData[tId] = incomingRows;
+            setTabData(tId, incomingRows);
             renderSubTabTableBody(tabsConfig.find(t => t.id === tId) || { group: 'A' }, incomingRows);
           } else {
             // User is typing in activeRowIndex: update other rows without disturbing cursor
+            const currentTabRows = getTabData(tId);
             incomingRows.forEach((r, idx) => {
-              if (idx !== activeRowIndex) {
-                state.tabsData[tId][idx] = r;
+              if (idx !== activeRowIndex && currentTabRows[idx]) {
+                currentTabRows[idx] = r;
                 const tr = subRows[idx];
                 if (tr) {
                   const c1 = tr.querySelector('.subtab-col-1');
@@ -2023,11 +2077,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (parsed && typeof parsed === 'object') {
           Object.keys(parsed).forEach(k => {
             if (isValidTabKey(k) && parsed[k] && typeof parsed[k] === 'object') {
-              state.tabsMeta[k] = {
-                name: typeof parsed[k].name === 'string' ? parsed[k].name : '',
-                date: typeof parsed[k].date === 'string' ? parsed[k].date : '',
-                group: typeof parsed[k].group === 'string' ? parsed[k].group : 'A'
-              };
+              setTabMeta(k, parsed[k]);
             }
           });
         }
@@ -2039,12 +2089,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (parsed && typeof parsed === 'object') {
           Object.keys(parsed).forEach(k => {
             if (isValidTabKey(k) && Array.isArray(parsed[k])) {
-              state.tabsData[k] = parsed[k].map(r => ({
-                col1: r && r.col1 !== undefined ? String(r.col1) : '',
-                col2: r && r.col2 !== undefined ? String(r.col2) : '',
-                col3: r && r.col3 !== undefined ? String(r.col3) : '',
-                col4: r && r.col4 !== undefined ? String(r.col4) : ''
-              }));
+              setTabData(k, parsed[k]);
             }
           });
         }
@@ -2192,7 +2237,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const sheetPrefix = currentView === 'narration' 
               ? 'Narration' 
-              : (state.tabsMeta[currentView]?.name || currentView).replace(/[^a-zA-Z0-9_-]/g, '_');
+              : getTabName(currentView, currentView).replace(/[^a-zA-Z0-9_-]/g, '_');
 
             const filename = `${sheetPrefix}-${dateStr}-${timeStr}.png`;
 
@@ -2232,7 +2277,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Reserved rows for all sub-sheets
       tabsConfig.forEach((cfg, idx) => {
         const tabId = cfg.id;
-        const tabName = state.tabsMeta[tabId]?.name || cfg.defaultName;
+        const tabName = getTabName(tabId, cfg.defaultName);
         const subResult = calculateSubTab(tabId);
         const balance = (cfg.group === 'A')
           ? (subResult.hasData ? formatExact(subResult.narrationOutput) : '')
@@ -2279,8 +2324,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Active Sub-Tab
     const tabId = targetView;
     const cfg = tabsConfig.find(t => t.id === tabId) || tabsConfig[0];
-    const meta = state.tabsMeta[tabId] || { name: cfg.defaultName, date: '' };
-    const rowsData = state.tabsData[tabId] || [];
+    const meta = getTabMeta(tabId) || { name: cfg.defaultName, date: '' };
+    const rowsData = getTabData(tabId);
     const subResult = calculateSubTab(tabId);
 
     let headers = [];
@@ -2676,27 +2721,25 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (target.classList.contains('subtab-col-3')) targetKey = 'col3';
       else if (target.classList.contains('subtab-col-4')) targetKey = 'col4';
 
-      if (!state.tabsData[tabId]) {
-        state.tabsData[tabId] = [];
-      }
+      const tabRows = getTabData(tabId);
 
       lines.forEach((line, i) => {
         const rowIdx = startIdx + i;
-        while (rowIdx >= state.tabsData[tabId].length) {
-          state.tabsData[tabId].push({ col1: '', col2: '', col3: '', col4: '' });
+        while (rowIdx >= tabRows.length) {
+          tabRows.push({ col1: '', col2: '', col3: '', col4: '' });
         }
 
         if (line.includes('\t') && targetKey === 'col1') {
           const parts = line.split('\t').map(p => p.trim());
-          if (parts[0] !== undefined) state.tabsData[tabId][rowIdx].col1 = parts[0];
-          if (parts[1] !== undefined) state.tabsData[tabId][rowIdx].col2 = parts[1];
-          if (parts[2] !== undefined) state.tabsData[tabId][rowIdx].col3 = parts[2];
-          if (parts[3] !== undefined) state.tabsData[tabId][rowIdx].col4 = parts[3];
+          if (parts[0] !== undefined) tabRows[rowIdx].col1 = parts[0];
+          if (parts[1] !== undefined) tabRows[rowIdx].col2 = parts[1];
+          if (parts[2] !== undefined) tabRows[rowIdx].col3 = parts[2];
+          if (parts[3] !== undefined) tabRows[rowIdx].col4 = parts[3];
         } else {
-          if (targetKey === 'col1') state.tabsData[tabId][rowIdx].col1 = line;
-          else if (targetKey === 'col2') state.tabsData[tabId][rowIdx].col2 = line;
-          else if (targetKey === 'col3') state.tabsData[tabId][rowIdx].col3 = line;
-          else if (targetKey === 'col4') state.tabsData[tabId][rowIdx].col4 = line;
+          if (targetKey === 'col1') tabRows[rowIdx].col1 = line;
+          else if (targetKey === 'col2') tabRows[rowIdx].col2 = line;
+          else if (targetKey === 'col3') tabRows[rowIdx].col3 = line;
+          else if (targetKey === 'col4') tabRows[rowIdx].col4 = line;
         }
       });
 
@@ -2742,8 +2785,10 @@ document.addEventListener('DOMContentLoaded', () => {
               const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
               if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
                 const tabId = tabsConfig[reservedIdx - 1].id;
-                if (state.tabsMeta[tabId]) {
-                  state.tabsMeta[tabId].name = parts[0];
+                const meta = getTabMeta(tabId);
+                if (meta) {
+                  meta.name = parts[0];
+                  setTabMeta(tabId, meta);
                   anyTabRenamed = true;
                 }
               }
@@ -2769,8 +2814,10 @@ document.addEventListener('DOMContentLoaded', () => {
               const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
               if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
                 const tabId = tabsConfig[reservedIdx - 1].id;
-                if (state.tabsMeta[tabId]) {
-                  state.tabsMeta[tabId].name = line;
+                const meta = getTabMeta(tabId);
+                if (meta) {
+                  meta.name = line;
+                  setTabMeta(tabId, meta);
                   anyTabRenamed = true;
                 }
               }
