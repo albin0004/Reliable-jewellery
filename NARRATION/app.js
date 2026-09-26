@@ -31,74 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return roundTwo(val);
   }
 
-  function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    return String(text)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
-
-  function isValidTabKey(key) {
-    if (typeof key !== 'string' || !key) return false;
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') return false;
-    return /^tab[a-zA-Z0-9_-]+$/i.test(key);
-  }
-
-  // --- Safe Tab State Accessors & Mutators (Prototype-free Map Backing) ---
-  function getTabMeta(tabId) {
-    if (!isValidTabKey(tabId)) return null;
-    return state.tabsMeta.get(tabId) || null;
-  }
-
-  function getTabName(tabId, fallback = '') {
-    const meta = getTabMeta(tabId);
-    return (meta && meta.name) ? meta.name : fallback;
-  }
-
-  function setTabMeta(tabId, meta) {
-    if (!isValidTabKey(tabId) || !meta || typeof meta !== 'object') return;
-    state.tabsMeta.set(tabId, {
-      name: typeof meta.name === 'string' ? meta.name : '',
-      date: typeof meta.date === 'string' ? meta.date : '',
-      group: typeof meta.group === 'string' ? meta.group : 'A'
-    });
-  }
-
-  function getTabData(tabId) {
-    if (!isValidTabKey(tabId)) return [];
-    if (!state.tabsData.has(tabId)) {
-      state.tabsData.set(tabId, [
-        { col1: '', col2: '', col3: '', col4: '' },
-        { col1: '', col2: '', col3: '', col4: '' },
-        { col1: '', col2: '', col3: '', col4: '' }
-      ]);
-    }
-    return state.tabsData.get(tabId);
-  }
-
-  function setTabData(tabId, rows) {
-    if (!isValidTabKey(tabId) || !Array.isArray(rows)) return;
-    const sanitizedRows = rows.map(r => ({
-      col1: r && r.col1 !== undefined && r.col1 !== null ? String(r.col1) : '',
-      col2: r && r.col2 !== undefined && r.col2 !== null ? String(r.col2) : '',
-      col3: r && r.col3 !== undefined && r.col3 !== null ? String(r.col3) : '',
-      col4: r && r.col4 !== undefined && r.col4 !== null ? String(r.col4) : ''
-    }));
-    state.tabsData.set(tabId, sanitizedRows);
-  }
-
-  function deleteTabState(tabId) {
-    if (isValidTabKey(tabId)) {
-      state.tabsMeta.delete(tabId);
-      state.tabsData.delete(tabId);
-      subTabCache.delete(tabId);
-      dirtyTabs.delete(tabId);
-    }
-  }
-
   // --- Default Initial Tab Configurations & Definitions ---
   // Group A: Tabs 1 to 5 (Metal / Loss Calculation - Exact Decimal Precision)
   // Group B: Tabs 6 to 8 (Order & Weight Tracking - 2-Decimal Precision)
@@ -149,27 +81,26 @@ document.addEventListener('DOMContentLoaded', () => {
       rows11Plus: [] // Manual rows after reserved tab rows
     },
     tabsConfig: tabsConfig,
-    tabsMeta: new Map(), // Map<tabId, { name: string, date: string, group: string }>
-    tabsData: new Map()  // Map<tabId, Array<{ col1, col2, col3, col4 }>>
+    tabsMeta: {}, // { [tabId]: { name: string, date: string, group: string } }
+    tabsData: {}  // { [tabId]: [ { col1, col2, col3, col4 } ] }
   };
 
   // Initialize Default Tab State
   function initDefaultTabsState() {
     tabsConfig.forEach(cfg => {
-      if (!isValidTabKey(cfg.id)) return;
-      if (!state.tabsMeta.has(cfg.id)) {
-        setTabMeta(cfg.id, {
+      if (!state.tabsMeta[cfg.id]) {
+        state.tabsMeta[cfg.id] = {
           name: cfg.defaultName,
           date: new Date().toISOString().split('T')[0],
           group: cfg.group
-        });
+        };
       }
-      if (!state.tabsData.has(cfg.id)) {
-        setTabData(cfg.id, [
+      if (!state.tabsData[cfg.id]) {
+        state.tabsData[cfg.id] = [
           { col1: '', col2: '', col3: '', col4: '' },
           { col1: '', col2: '', col3: '', col4: '' },
           { col1: '', col2: '', col3: '', col4: '' }
-        ]);
+        ];
       }
     });
   }
@@ -182,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRowBtn = document.getElementById('addRowBtn');
   const addBottomRowBtn = document.getElementById('addBottomRowBtn');
   const resetTableBtn = document.getElementById('resetTableBtn');
+  const openAddTabModalBtn = document.getElementById('openAddTabModalBtn');
   const onHandStockVal = document.getElementById('onHandStockVal');
   const physicalStockInput = document.getElementById('physicalStockInput');
   const differenceVal = document.getElementById('differenceVal');
@@ -274,13 +206,84 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Helper to ensure strict group-wise order (Group A -> Group B -> Group C)
+  function ensureTabsGroupWiseOrder(tabs) {
+    if (!Array.isArray(tabs)) return [];
+    const groupOrder = { 'A': 1, 'B': 2, 'C': 3 };
+    const sorted = [...tabs].sort((a, b) => {
+      const gA = groupOrder[a.group] || 99;
+      const gB = groupOrder[b.group] || 99;
+      return gA - gB;
+    });
+    sorted.forEach((t, idx) => {
+      t.num = idx + 1;
+    });
+    return sorted;
+  }
+
+  // Insert newly created tab in strict group-wise sequence (at the end of its respective group)
+  function insertTabGroupWise(newTabCfg) {
+    const targetGroup = newTabCfg.group;
+    let insertIdx = -1;
+
+    if (targetGroup === 'A') {
+      // Find the last index of Group A tabs
+      for (let i = tabsConfig.length - 1; i >= 0; i--) {
+        if (tabsConfig[i].group === 'A') {
+          insertIdx = i + 1;
+          break;
+        }
+      }
+      if (insertIdx === -1) insertIdx = 0;
+    } else if (targetGroup === 'B') {
+      // Find the last index of Group B tabs
+      for (let i = tabsConfig.length - 1; i >= 0; i--) {
+        if (tabsConfig[i].group === 'B') {
+          insertIdx = i + 1;
+          break;
+        }
+      }
+      if (insertIdx === -1) {
+        // If no Group B tabs exist, insert after the last Group A tab
+        for (let i = tabsConfig.length - 1; i >= 0; i--) {
+          if (tabsConfig[i].group === 'A') {
+            insertIdx = i + 1;
+            break;
+          }
+        }
+        if (insertIdx === -1) insertIdx = 0;
+      }
+    } else if (targetGroup === 'C') {
+      // Find the last index of Group C tabs
+      for (let i = tabsConfig.length - 1; i >= 0; i--) {
+        if (tabsConfig[i].group === 'C') {
+          insertIdx = i + 1;
+          break;
+        }
+      }
+      if (insertIdx === -1) {
+        insertIdx = tabsConfig.length;
+      }
+    }
+
+    if (insertIdx >= 0 && insertIdx <= tabsConfig.length) {
+      tabsConfig.splice(insertIdx, 0, newTabCfg);
+    } else {
+      tabsConfig.push(newTabCfg);
+    }
+
+    // Re-index tab numbers (1..N) to match sequence
+    tabsConfig.forEach((t, idx) => {
+      t.num = idx + 1;
+    });
+  }
+
   // Helper to determine next logical tab number
   function getNextSequentialTabNumber() {
     let highestNum = 0;
     tabsConfig.forEach(t => {
       if (t.num && t.num > highestNum) highestNum = t.num;
-      const name = getTabName(t.id, t.defaultName || '');
-      const match = name.match(/Tab\s*(\d+)/i);
+      const match = (state.tabsMeta[t.id]?.name || t.defaultName || '').match(/Tab\s*(\d+)/i);
       if (match && parseInt(match[1], 10) > highestNum) {
         highestNum = parseInt(match[1], 10);
       }
@@ -288,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return Math.max(highestNum + 1, tabsConfig.length + 1);
   }
 
-  // --- Dynamic Tab Creation Engine ---
+  // --- Dynamic Tab Creation Engine (Strict Group-Wise Sequential Insertion) ---
   function createDynamicTab(group = 'A', customName = '') {
     const validGroup = (group === 'B' || group === 'C') ? group : 'A';
     const nextNum = getNextSequentialTabNumber();
@@ -302,22 +305,23 @@ document.addEventListener('DOMContentLoaded', () => {
       defaultName: finalName
     };
 
-    tabsConfig.push(newTabCfg);
+    // Insert into tabsConfig in strict group-wise order: all Group A, then all Group B, then all Group C
+    insertTabGroupWise(newTabCfg);
     state.tabsConfig = tabsConfig;
 
     // Initialize Tab Metadata
-    setTabMeta(newId, {
+    state.tabsMeta[newId] = {
       name: finalName,
       date: new Date().toISOString().split('T')[0],
       group: validGroup
-    });
+    };
 
     // Initialize 3 standard empty rows
-    setTabData(newId, [
+    state.tabsData[newId] = [
       { col1: '', col2: '', col3: '', col4: '' },
       { col1: '', col2: '', col3: '', col4: '' },
       { col1: '', col2: '', col3: '', col4: '' }
-    ]);
+    ];
 
     // Invalidate sub-tab cache
     invalidateSubTab(newId);
@@ -341,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabCfg = tabsConfig.find(t => t.id === tabId);
     if (!tabCfg) return;
 
-    const tabName = getTabName(tabId, tabCfg.defaultName);
+    const tabName = state.tabsMeta[tabId]?.name || tabCfg.defaultName;
 
     showConfirmModal(
       `Delete Tab "${tabName}"?`,
@@ -354,7 +358,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.tabsConfig = tabsConfig;
 
         // Clean up metadata & data
-        deleteTabState(tabId);
+        delete state.tabsMeta[tabId];
+        delete state.tabsData[tabId];
+        delete subTabCache[tabId];
+        dirtyTabs.delete(tabId);
 
         // Rebuild Narration reserved rows & sidebar
         buildReservedRows();
@@ -404,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Memoization & Caching for Subtab Calculations ---
-  const subTabCache = new Map();
+  const subTabCache = {};
   const dirtyTabs = new Set();
 
   function invalidateSubTab(tabId) {
@@ -420,14 +427,14 @@ document.addEventListener('DOMContentLoaded', () => {
    * If the tab has no numeric data entered, narrationOutput is '' (blank).
    */
   function calculateSubTab(tabId) {
-    if (!dirtyTabs.has(tabId) && subTabCache.has(tabId)) {
-      return subTabCache.get(tabId);
+    if (!dirtyTabs.has(tabId) && subTabCache[tabId]) {
+      return subTabCache[tabId];
     }
 
     const cfg = tabsConfig.find(t => t.id === tabId);
     if (!cfg) return { hasData: false, narrationOutput: '' };
 
-    const rows = getTabData(tabId);
+    const rows = state.tabsData[tabId] || [];
     let result = { hasData: false, narrationOutput: '' };
 
     if (cfg.group === 'A') {
@@ -516,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
 
-    subTabCache.set(tabId, result);
+    subTabCache[tabId] = result;
     dirtyTabs.delete(tabId);
     return result;
   }
@@ -537,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Sync tab title if not actively focused
         if (document.activeElement !== narrationTextarea && narrationTextarea) {
-          const expectedName = getTabName(tabId, cfg.defaultName);
+          const expectedName = state.tabsMeta[tabId]?.name || cfg.defaultName;
           if (narrationTextarea.value !== expectedName) {
             narrationTextarea.value = expectedName;
           }
@@ -649,43 +656,36 @@ document.addEventListener('DOMContentLoaded', () => {
     tabsConfig.forEach((cfg, index) => {
       const tabId = cfg.id;
       const rowNum = index + 1;
-      const tabName = getTabName(tabId, cfg.defaultName);
-      const safeTabName = escapeHtml(tabName);
-      const safeDefaultName = escapeHtml(cfg.defaultName);
-      const safeGroup = escapeHtml(cfg.group);
-      const safeTabId = escapeHtml(tabId);
+      const tabName = state.tabsMeta[tabId]?.name || cfg.defaultName;
 
       const tr = document.createElement('tr');
-      tr.setAttribute('data-reserved-row', String(rowNum));
-      tr.setAttribute('data-tab-id', safeTabId);
+      tr.setAttribute('data-reserved-row', rowNum);
+      tr.setAttribute('data-tab-id', tabId);
       tr.className = 'reserved-tab-row';
 
       tr.innerHTML = `
         <td class="row-num-cell" data-label="NUMBER">${rowNum}</td>
         <td data-label="NARRATION" data-col-idx="1">
           <div class="reserved-narration-cell">
-            <textarea class="cell-textarea col-narration" rows="1" placeholder="${safeDefaultName}...">${safeTabName}</textarea>
+            <textarea class="cell-textarea col-narration" rows="1" placeholder="${cfg.defaultName}...">${tabName}</textarea>
           </div>
         </td>
         <td data-label="1" data-col-idx="2">
-          <input type="text" class="cell-input col-1 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${safeTabName} (Group ${safeGroup})">
+          <input type="text" class="cell-input col-1 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName} (Group ${cfg.group})">
         </td>
         <td data-label="2" data-col-idx="3">
-          <input type="text" class="cell-input col-2 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${safeTabName} (Group ${safeGroup})">
+          <input type="text" class="cell-input col-2 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName} (Group ${cfg.group})">
         </td>
         <td data-label="3" data-col-idx="4">
-          <input type="text" class="cell-input col-3 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${safeTabName} (Group ${safeGroup})">
+          <input type="text" class="cell-input col-3 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName} (Group ${cfg.group})">
         </td>
-        <td class="computed-cell col-4-display reserved-col-4" data-label="4" data-col-idx="5" title="Direct input disabled. Auto-calculated from ${safeTabName}"></td>
+        <td class="computed-cell col-4-display reserved-col-4" data-label="4" data-col-idx="5" title="Direct input disabled. Auto-calculated from ${tabName}"></td>
         <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
           <div class="row-actions-cell">
-            <button class="delete-row-btn reserved-delete-btn" data-tab-id="${safeTabId}" title="Clear ${safeTabName} data">
-              <i data-lucide="eraser"></i>
-            </button>
-            <button class="reserved-remove-btn" data-tab-id="${safeTabId}" title="Delete Tab ${safeTabName}">
+            <button class="reserved-remove-btn" data-tab-id="${tabId}" title="Delete Tab ${tabName}">
               <i data-lucide="trash-2"></i>
             </button>
-            <button class="reserved-jump-btn" data-jump-tab="${safeTabId}" title="Open ${safeTabName}">
+            <button class="reserved-jump-btn" data-jump-tab="${tabId}" title="Open ${tabName}">
               <i data-lucide="arrow-right"></i>
             </button>
           </div>
@@ -706,23 +706,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Jump button opens corresponding sub-tab
       tr.querySelector('.reserved-jump-btn').addEventListener('click', () => {
         switchView(tabId);
-      });
-
-      // Clear action button: resets that tab's data entries
-      tr.querySelector('.reserved-delete-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        setTabData(tabId, [
-          { col1: '', col2: '', col3: '', col4: '' },
-          { col1: '', col2: '', col3: '', col4: '' },
-          { col1: '', col2: '', col3: '', col4: '' }
-        ]);
-        invalidateSubTab(tabId);
-        calculateReconciliation(true);
-        flushPendingSync();
-        if (currentView === tabId) {
-          renderActiveSubTabView();
-        }
-        showToast(`"${tabName}" data cleared.`);
       });
 
       // Delete Tab action button
@@ -748,21 +731,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const c1Formatted = data.c1 !== '' ? formatTwoDecimals(data.c1) : '';
     const c2Formatted = data.c2 !== '' ? formatTwoDecimals(data.c2) : '';
     const c3Formatted = data.c3 !== '' ? formatTwoDecimals(data.c3) : '';
-    const safeNarration = escapeHtml(data.narration || '');
 
     tr.innerHTML = `
       <td class="row-num-cell" data-label="NUMBER"></td>
       <td data-label="NARRATION" data-col-idx="1">
-        <textarea class="cell-textarea col-narration" placeholder="Enter narration..." rows="1">${safeNarration}</textarea>
+        <textarea class="cell-textarea col-narration" placeholder="Enter narration..." rows="1">${data.narration || ''}</textarea>
       </td>
       <td data-label="1" data-col-idx="2">
-        <input type="text" inputmode="decimal" class="cell-input col-1" placeholder="" value="${escapeHtml(c1Formatted)}">
+        <input type="text" inputmode="decimal" class="cell-input col-1" placeholder="" value="${c1Formatted}">
       </td>
       <td data-label="2" data-col-idx="3">
-        <input type="text" inputmode="decimal" class="cell-input col-2" placeholder="" value="${escapeHtml(c2Formatted)}">
+        <input type="text" inputmode="decimal" class="cell-input col-2" placeholder="" value="${c2Formatted}">
       </td>
       <td data-label="3" data-col-idx="4">
-        <input type="text" inputmode="decimal" class="cell-input col-3" placeholder="" value="${escapeHtml(c3Formatted)}">
+        <input type="text" inputmode="decimal" class="cell-input col-3" placeholder="" value="${c3Formatted}">
       </td>
       <td class="computed-cell col-4-display" data-label="4" data-col-idx="5"></td>
       <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
@@ -833,8 +815,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const meta = getTabMeta(tabId) || { name: cfg.defaultName, date: new Date().toISOString().split('T')[0], group: cfg.group };
-    const rows = getTabData(tabId);
+    const meta = state.tabsMeta[tabId] || { name: cfg.defaultName, date: new Date().toISOString().split('T')[0], group: cfg.group };
+    const rows = state.tabsData[tabId] || [];
 
     // Header Controls
     subTabTitleDisplay.textContent = meta.name;
@@ -936,7 +918,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (cfg.group === 'B') {
       const entries = document.getElementById('metricItemEntriesVal');
       const totalCol2 = document.getElementById('metricTotalCol2Val');
-      if (entries) entries.textContent = getTabData(cfg.id).length;
+      if (entries) entries.textContent = state.tabsData[cfg.id]?.length || 0;
       if (totalCol2) totalCol2.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '—';
     } else if (cfg.group === 'C') {
       const totalA = document.getElementById('metricTotalAVal');
@@ -995,7 +977,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     rows.forEach((r, idx) => {
       const tr = document.createElement('tr');
-      const safeCol1 = escapeHtml(r.col1 || '');
 
       if (cfg.group === 'A') {
         const col2Val = r.col2 !== '' && r.col2 !== undefined && r.col2 !== null ? r.col2 : '';
@@ -1005,16 +986,16 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = `
           <td class="row-num-cell">${idx + 1}</td>
           <td data-col-idx="1">
-            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${safeCol1}</textarea>
+            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
           <td data-col-idx="2">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${escapeHtml(col2Val)}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${col2Val}">
           </td>
           <td data-col-idx="3">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${escapeHtml(col3Val)}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${col3Val}">
           </td>
           <td data-col-idx="4">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${escapeHtml(col4Val)}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Val}">
           </td>
           <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
             <div class="row-actions-cell">
@@ -1032,16 +1013,16 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = `
           <td class="row-num-cell">${idx + 1}</td>
           <td data-col-idx="1">
-            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${safeCol1}</textarea>
+            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
           <td data-col-idx="2">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${escapeHtml(col2Formatted)}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${col2Formatted}">
           </td>
           <td data-col-idx="3">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${escapeHtml(col3Formatted)}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${col3Formatted}">
           </td>
           <td data-col-idx="4">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${escapeHtml(col4Formatted)}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Formatted}">
           </td>
           <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
             <div class="row-actions-cell">
@@ -1065,16 +1046,16 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = `
           <td class="row-num-cell">${idx + 1}</td>
           <td data-col-idx="1">
-            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${safeCol1}</textarea>
+            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
           <td data-col-idx="2">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${escapeHtml(valAFormatted)}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${valAFormatted}">
           </td>
           <td data-col-idx="3">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${escapeHtml(valBFormatted)}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${valBFormatted}">
           </td>
           <td class="computed-cell subtab-col-diff" data-col-idx="4">
-            ${escapeHtml(rowDiffFormatted)}
+            ${rowDiffFormatted}
           </td>
           <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
             <div class="row-actions-cell">
@@ -1093,13 +1074,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const col4Input = tr.querySelector('.subtab-col-4');
 
       const handleCellInput = () => {
-        const tabRows = getTabData(cfg.id);
-        if (tabRows && tabRows[idx]) {
-          tabRows[idx].col1 = col1Input?.value || '';
-          tabRows[idx].col2 = col2Input?.value || '';
-          tabRows[idx].col3 = col3Input?.value || '';
-          tabRows[idx].col4 = col4Input ? col4Input.value : '';
-        }
+        state.tabsData[cfg.id][idx] = {
+          col1: col1Input?.value || '',
+          col2: col2Input?.value || '',
+          col3: col3Input?.value || '',
+          col4: col4Input ? col4Input.value : ''
+        };
 
         invalidateSubTab(cfg.id);
 
@@ -1148,10 +1128,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Delete row button
       tr.querySelector('.subtab-delete-row-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        const tabRows = getTabData(cfg.id);
-        tabRows.splice(idx, 1);
-        if (tabRows.length === 0) {
-          tabRows.push({ col1: '', col2: '', col3: '', col4: '' });
+        state.tabsData[cfg.id].splice(idx, 1);
+        if (state.tabsData[cfg.id].length === 0) {
+          state.tabsData[cfg.id].push({ col1: '', col2: '', col3: '', col4: '' });
         }
         invalidateSubTab(cfg.id);
         renderActiveSubTabView();
@@ -1335,19 +1314,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Group Tabs
       grpTabs.forEach(cfg => {
-        const meta = getTabMeta(cfg.id) || { name: cfg.defaultName };
+        const meta = state.tabsMeta[cfg.id] || { name: cfg.defaultName };
         const subResult = calculateSubTab(cfg.id);
 
         const btn = document.createElement('button');
         btn.className = `sidebar-tab-btn ${currentView === cfg.id ? 'active' : ''}`;
         btn.setAttribute('data-sidebar-id', cfg.id);
 
-        const valHtml = subResult.narrationOutput ? `<span class="sidebar-tab-val">${escapeHtml(subResult.narrationOutput)}</span>` : '';
+        const valHtml = subResult.narrationOutput ? `<span class="sidebar-tab-val">${subResult.narrationOutput}</span>` : '';
 
         btn.innerHTML = `
           <div class="sidebar-tab-left">
             <span class="sidebar-dot"></span>
-            <span class="sidebar-tab-name">${escapeHtml(meta.name)}</span>
+            <span class="sidebar-tab-name">${meta.name}</span>
           </div>
           ${valHtml}
         `;
@@ -1399,7 +1378,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const btn = sidebarTabsList.querySelector(`[data-sidebar-id="${cfg.id}"]`);
       if (btn) {
         const nameSpan = btn.querySelector('.sidebar-tab-name');
-        const name = getTabName(cfg.id, cfg.defaultName);
+        const name = state.tabsMeta[cfg.id]?.name || cfg.defaultName;
         if (nameSpan && nameSpan.textContent !== name) {
           nameSpan.textContent = name;
         }
@@ -1423,12 +1402,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Renaming Tabs (Global Sync) ---
 
   function renameTab(tabId, newName) {
-    if (!isValidTabKey(tabId) || !newName) return;
-    const meta = getTabMeta(tabId);
-    if (!meta) return;
+    if (!newName || !state.tabsMeta[tabId]) return;
 
-    meta.name = newName;
-    setTabMeta(tabId, meta);
+    state.tabsMeta[tabId].name = newName;
 
     // Update subtab header if active
     if (currentView === tabId) {
@@ -1464,8 +1440,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const commitHeaderRename = () => {
-      const currentMeta = getTabMeta(currentView);
-      const newName = subTabTitleInput.value.trim() || (currentMeta ? currentMeta.name : '');
+      const newName = subTabTitleInput.value.trim() || state.tabsMeta[currentView]?.name;
       renameTab(currentView, newName);
       subTabTitleInput.classList.add('hidden');
       subTabTitleDisplay.classList.remove('hidden');
@@ -1476,8 +1451,7 @@ document.addEventListener('DOMContentLoaded', () => {
     subTabTitleInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') commitHeaderRename();
       else if (e.key === 'Escape') {
-        const currentMeta = getTabMeta(currentView);
-        subTabTitleInput.value = currentMeta ? currentMeta.name : '';
+        subTabTitleInput.value = state.tabsMeta[currentView]?.name;
         subTabTitleInput.classList.add('hidden');
         subTabTitleDisplay.classList.remove('hidden');
       }
@@ -1488,12 +1462,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (subTabDateInput) {
     subTabDateInput.addEventListener('input', () => {
       if (currentView.startsWith('tab')) {
-        const meta = getTabMeta(currentView);
-        if (meta) {
-          meta.date = subTabDateInput.value;
-          setTabMeta(currentView, meta);
-          saveStateAndSync();
-        }
+        state.tabsMeta[currentView].date = subTabDateInput.value;
+        saveStateAndSync();
       }
     });
   }
@@ -1502,8 +1472,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleAddSubTabRow() {
     if (!currentView.startsWith('tab')) return;
     const tabId = currentView;
-    const tabRows = getTabData(tabId);
-    tabRows.push({ col1: '', col2: '', col3: '', col4: '' });
+    if (!state.tabsData[tabId]) {
+      state.tabsData[tabId] = [];
+    }
+    state.tabsData[tabId].push({ col1: '', col2: '', col3: '', col4: '' });
     invalidateSubTab(tabId);
     renderActiveSubTabView();
     calculateReconciliation(true);
@@ -1535,18 +1507,18 @@ document.addEventListener('DOMContentLoaded', () => {
   if (subTabResetBtn) {
     subTabResetBtn.addEventListener('click', () => {
       if (!currentView.startsWith('tab')) return;
-      const meta = getTabMeta(currentView);
+      const meta = state.tabsMeta[currentView];
       const tabName = meta?.name || 'this sub-sheet';
 
       showConfirmModal(
         `Reset ${tabName}?`,
         `This action will clear all row entries in "${tabName}" without affecting other tabs or the main Narration sheet.`,
         () => {
-          setTabData(currentView, [
+          state.tabsData[currentView] = [
             { col1: '', col2: '', col3: '', col4: '' },
             { col1: '', col2: '', col3: '', col4: '' },
             { col1: '', col2: '', col3: '', col4: '' }
-          ]);
+          ];
           invalidateSubTab(currentView);
           renderActiveSubTabView();
           calculateReconciliation(true);
@@ -1786,8 +1758,8 @@ document.addEventListener('DOMContentLoaded', () => {
         rows11Plus: manualRows
       },
       tabsConfig: tabsConfig,
-      tabsMeta: Object.fromEntries(state.tabsMeta),
-      tabsData: Object.fromEntries(state.tabsData),
+      tabsMeta: state.tabsMeta,
+      tabsData: state.tabsData,
       lastUpdated: Date.now(),
       deviceId: syncDeviceId
     };
@@ -1929,10 +1901,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Tab Configuration Merge (Detect dynamic tabs created or removed remotely)
     if (Array.isArray(data.tabsConfig) && data.tabsConfig.length > 0) {
+      const ordered = ensureTabsGroupWiseOrder(data.tabsConfig);
       const currentIds = tabsConfig.map(t => t.id).join(',');
-      const remoteIds = data.tabsConfig.map(t => t.id).join(',');
+      const remoteIds = ordered.map(t => t.id).join(',');
       if (currentIds !== remoteIds) {
-        tabsConfig = data.tabsConfig;
+        tabsConfig = ordered;
         state.tabsConfig = tabsConfig;
         buildReservedRows();
         buildSidebar();
@@ -1943,28 +1916,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.tabsMeta && typeof data.tabsMeta === 'object') {
       let anyRenamed = false;
       Object.keys(data.tabsMeta).forEach(tId => {
-        if (!isValidTabKey(tId)) return;
-        const incoming = data.tabsMeta[tId];
-        if (!incoming || typeof incoming !== 'object') return;
-        const existing = getTabMeta(tId);
-
-        if (!existing) {
-          setTabMeta(tId, incoming);
+        if (!state.tabsMeta[tId]) {
+          state.tabsMeta[tId] = data.tabsMeta[tId];
           anyRenamed = true;
         } else {
-          if (incoming.name && incoming.name !== existing.name) {
-            existing.name = incoming.name;
+          const incoming = data.tabsMeta[tId];
+          if (incoming.name && incoming.name !== state.tabsMeta[tId].name) {
+            state.tabsMeta[tId].name = incoming.name;
             anyRenamed = true;
           }
-          if (incoming.date) existing.date = incoming.date;
-          if (incoming.group) existing.group = incoming.group;
-          setTabMeta(tId, existing);
+          if (incoming.date) {
+            state.tabsMeta[tId].date = incoming.date;
+          }
+          if (incoming.group) {
+            state.tabsMeta[tId].group = incoming.group;
+          }
         }
       });
       if (anyRenamed) {
         updateSidebarTabNames();
         if (currentView.startsWith('tab')) {
-          const meta = getTabMeta(currentView);
+          const meta = state.tabsMeta[currentView];
           if (meta && subTabTitleDisplay && activeEl !== subTabTitleInput) {
             subTabTitleDisplay.textContent = meta.name;
             subTabTitleInput.value = meta.name;
@@ -1976,7 +1948,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. Sub-tabs Data Merge
     if (data.tabsData && typeof data.tabsData === 'object') {
       Object.keys(data.tabsData).forEach(tId => {
-        if (!isValidTabKey(tId)) return;
         const incomingRows = data.tabsData[tId];
         if (!Array.isArray(incomingRows)) return;
 
@@ -1985,7 +1956,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (tId !== currentView) {
           // Tab is not currently open: update in background
-          setTabData(tId, incomingRows);
+          state.tabsData[tId] = incomingRows;
         } else {
           // Tab is currently open! Check if user is actively typing in a row
           const subRows = Array.from(subTabTableBody.querySelectorAll('tr'));
@@ -1997,14 +1968,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
           if (activeRowIndex === -1 || incomingRows.length !== subRows.length) {
             // User not typing or row count changed: full update
-            setTabData(tId, incomingRows);
+            state.tabsData[tId] = incomingRows;
             renderSubTabTableBody(tabsConfig.find(t => t.id === tId) || { group: 'A' }, incomingRows);
           } else {
             // User is typing in activeRowIndex: update other rows without disturbing cursor
-            const currentTabRows = getTabData(tId);
             incomingRows.forEach((r, idx) => {
-              if (idx !== activeRowIndex && currentTabRows[idx]) {
-                currentTabRows[idx] = r;
+              if (idx !== activeRowIndex) {
+                state.tabsData[tId][idx] = r;
                 const tr = subRows[idx];
                 if (tr) {
                   const c1 = tr.querySelector('.subtab-col-1');
@@ -2065,7 +2035,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (savedConfig) {
         const parsed = JSON.parse(savedConfig);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          tabsConfig = parsed;
+          tabsConfig = ensureTabsGroupWiseOrder(parsed);
           state.tabsConfig = tabsConfig;
         }
       }
@@ -2074,25 +2044,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const savedMeta = localStorage.getItem(STORAGE_KEYS.TABS_META) || localStorage.getItem(STORAGE_KEYS.LEGACY_META_V8);
       if (savedMeta) {
         const parsed = JSON.parse(savedMeta);
-        if (parsed && typeof parsed === 'object') {
-          Object.keys(parsed).forEach(k => {
-            if (isValidTabKey(k) && parsed[k] && typeof parsed[k] === 'object') {
-              setTabMeta(k, parsed[k]);
-            }
-          });
-        }
+        Object.keys(parsed).forEach(k => {
+          state.tabsMeta[k] = parsed[k];
+        });
       }
 
       const savedData = localStorage.getItem(STORAGE_KEYS.TABS_DATA) || localStorage.getItem(STORAGE_KEYS.LEGACY_DATA_V8);
       if (savedData) {
         const parsed = JSON.parse(savedData);
-        if (parsed && typeof parsed === 'object') {
-          Object.keys(parsed).forEach(k => {
-            if (isValidTabKey(k) && Array.isArray(parsed[k])) {
-              setTabData(k, parsed[k]);
-            }
-          });
-        }
+        Object.keys(parsed).forEach(k => {
+          state.tabsData[k] = parsed[k];
+        });
       }
 
       // Ensure all tabs in tabsConfig have initialized meta & data
@@ -2237,7 +2199,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const sheetPrefix = currentView === 'narration' 
               ? 'Narration' 
-              : getTabName(currentView, currentView).replace(/[^a-zA-Z0-9_-]/g, '_');
+              : (state.tabsMeta[currentView]?.name || currentView).replace(/[^a-zA-Z0-9_-]/g, '_');
 
             const filename = `${sheetPrefix}-${dateStr}-${timeStr}.png`;
 
@@ -2277,7 +2239,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Reserved rows for all sub-sheets
       tabsConfig.forEach((cfg, idx) => {
         const tabId = cfg.id;
-        const tabName = getTabName(tabId, cfg.defaultName);
+        const tabName = state.tabsMeta[tabId]?.name || cfg.defaultName;
         const subResult = calculateSubTab(tabId);
         const balance = (cfg.group === 'A')
           ? (subResult.hasData ? formatExact(subResult.narrationOutput) : '')
@@ -2324,8 +2286,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Active Sub-Tab
     const tabId = targetView;
     const cfg = tabsConfig.find(t => t.id === tabId) || tabsConfig[0];
-    const meta = getTabMeta(tabId) || { name: cfg.defaultName, date: '' };
-    const rowsData = getTabData(tabId);
+    const meta = state.tabsMeta[tabId] || { name: cfg.defaultName, date: '' };
+    const rowsData = state.tabsData[tabId] || [];
     const subResult = calculateSubTab(tabId);
 
     let headers = [];
@@ -2387,6 +2349,12 @@ document.addEventListener('DOMContentLoaded', () => {
       summary
     };
   }
+
+  const escapeHtml = (text) => {
+    const div = document.createElement('div');
+    div.textContent = (text === null || text === undefined) ? '' : String(text);
+    return div.innerHTML;
+  };
 
   // --- TABLE CELL RANGE SELECTION ENGINE (Excel / Sheets Multi-Column Drag) ---
   let activeRangeSelection = null;
@@ -2721,25 +2689,24 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (target.classList.contains('subtab-col-3')) targetKey = 'col3';
       else if (target.classList.contains('subtab-col-4')) targetKey = 'col4';
 
-      const tabRows = getTabData(tabId);
+      if (!state.tabsData[tabId]) {
+        state.tabsData[tabId] = [];
+      }
 
       lines.forEach((line, i) => {
         const rowIdx = startIdx + i;
-        while (rowIdx >= tabRows.length) {
-          tabRows.push({ col1: '', col2: '', col3: '', col4: '' });
+        while (rowIdx >= state.tabsData[tabId].length) {
+          state.tabsData[tabId].push({ col1: '', col2: '', col3: '', col4: '' });
         }
 
         if (line.includes('\t') && targetKey === 'col1') {
           const parts = line.split('\t').map(p => p.trim());
-          if (parts[0] !== undefined) tabRows[rowIdx].col1 = parts[0];
-          if (parts[1] !== undefined) tabRows[rowIdx].col2 = parts[1];
-          if (parts[2] !== undefined) tabRows[rowIdx].col3 = parts[2];
-          if (parts[3] !== undefined) tabRows[rowIdx].col4 = parts[3];
+          if (parts[0] !== undefined) state.tabsData[tabId][rowIdx].col1 = parts[0];
+          if (parts[1] !== undefined) state.tabsData[tabId][rowIdx].col2 = parts[1];
+          if (parts[2] !== undefined) state.tabsData[tabId][rowIdx].col3 = parts[2];
+          if (parts[3] !== undefined) state.tabsData[tabId][rowIdx].col4 = parts[3];
         } else {
-          if (targetKey === 'col1') tabRows[rowIdx].col1 = line;
-          else if (targetKey === 'col2') tabRows[rowIdx].col2 = line;
-          else if (targetKey === 'col3') tabRows[rowIdx].col3 = line;
-          else if (targetKey === 'col4') tabRows[rowIdx].col4 = line;
+          state.tabsData[tabId][rowIdx][targetKey] = line;
         }
       });
 
@@ -2785,10 +2752,8 @@ document.addEventListener('DOMContentLoaded', () => {
               const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
               if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
                 const tabId = tabsConfig[reservedIdx - 1].id;
-                const meta = getTabMeta(tabId);
-                if (meta) {
-                  meta.name = parts[0];
-                  setTabMeta(tabId, meta);
+                if (state.tabsMeta[tabId]) {
+                  state.tabsMeta[tabId].name = parts[0];
                   anyTabRenamed = true;
                 }
               }
@@ -2814,23 +2779,17 @@ document.addEventListener('DOMContentLoaded', () => {
               const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
               if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
                 const tabId = tabsConfig[reservedIdx - 1].id;
-                const meta = getTabMeta(tabId);
-                if (meta) {
-                  meta.name = line;
-                  setTabMeta(tabId, meta);
+                if (state.tabsMeta[tabId]) {
+                  state.tabsMeta[tabId].name = line;
                   anyTabRenamed = true;
                 }
               }
             }
-          } else if (colType === 'col-1') {
-            const input = tr.querySelector('.col-1');
-            if (input && !input.readOnly) input.value = line;
-          } else if (colType === 'col-2') {
-            const input = tr.querySelector('.col-2');
-            if (input && !input.readOnly) input.value = line;
-          } else if (colType === 'col-3') {
-            const input = tr.querySelector('.col-3');
-            if (input && !input.readOnly) input.value = line;
+          } else {
+            const input = tr.querySelector('.' + colType);
+            if (input && !input.readOnly) {
+              input.value = line;
+            }
           }
         }
       });
