@@ -303,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clean up metadata & data
         delete state.tabsMeta[tabId];
         delete state.tabsData[tabId];
-        delete subTabCache[tabId];
+        subTabCache.delete(tabId);
         dirtyTabs.delete(tabId);
 
         // Rebuild Narration reserved rows & sidebar
@@ -354,7 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Memoization & Caching for Subtab Calculations ---
-  const subTabCache = {};
+  const subTabCache = new Map();
   const dirtyTabs = new Set();
 
   function invalidateSubTab(tabId) {
@@ -370,8 +370,8 @@ document.addEventListener('DOMContentLoaded', () => {
    * If the tab has no numeric data entered, narrationOutput is '' (blank).
    */
   function calculateSubTab(tabId) {
-    if (!dirtyTabs.has(tabId) && subTabCache[tabId]) {
-      return subTabCache[tabId];
+    if (!dirtyTabs.has(tabId) && subTabCache.has(tabId)) {
+      return subTabCache.get(tabId);
     }
 
     const cfg = tabsConfig.find(t => t.id === tabId);
@@ -466,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
 
-    subTabCache[tabId] = result;
+    subTabCache.set(tabId, result);
     dirtyTabs.delete(tabId);
     return result;
   }
@@ -2693,7 +2693,10 @@ document.addEventListener('DOMContentLoaded', () => {
           if (parts[2] !== undefined) state.tabsData[tabId][rowIdx].col3 = parts[2];
           if (parts[3] !== undefined) state.tabsData[tabId][rowIdx].col4 = parts[3];
         } else {
-          state.tabsData[tabId][rowIdx][targetKey] = line;
+          if (targetKey === 'col1') state.tabsData[tabId][rowIdx].col1 = line;
+          else if (targetKey === 'col2') state.tabsData[tabId][rowIdx].col2 = line;
+          else if (targetKey === 'col3') state.tabsData[tabId][rowIdx].col3 = line;
+          else if (targetKey === 'col4') state.tabsData[tabId][rowIdx].col4 = line;
         }
       });
 
@@ -2772,11 +2775,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
               }
             }
-          } else {
-            const input = tr.querySelector('.' + colType);
-            if (input && !input.readOnly) {
-              input.value = line;
-            }
+          } else if (colType === 'col-1') {
+            const input = tr.querySelector('.col-1');
+            if (input && !input.readOnly) input.value = line;
+          } else if (colType === 'col-2') {
+            const input = tr.querySelector('.col-2');
+            if (input && !input.readOnly) input.value = line;
+          } else if (colType === 'col-3') {
+            const input = tr.querySelector('.col-3');
+            if (input && !input.readOnly) input.value = line;
           }
         }
       });
