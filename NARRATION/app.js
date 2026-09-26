@@ -31,6 +31,16 @@ document.addEventListener('DOMContentLoaded', () => {
     return roundTwo(val);
   }
 
+  function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   // --- Default Initial Tab Configurations & Definitions ---
   // Group A: Tabs 1 to 5 (Metal / Loss Calculation - Exact Decimal Precision)
   // Group B: Tabs 6 to 8 (Order & Weight Tracking - 2-Decimal Precision)
@@ -113,7 +123,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRowBtn = document.getElementById('addRowBtn');
   const addBottomRowBtn = document.getElementById('addBottomRowBtn');
   const resetTableBtn = document.getElementById('resetTableBtn');
-  const openAddTabModalBtn = document.getElementById('openAddTabModalBtn');
   const onHandStockVal = document.getElementById('onHandStockVal');
   const physicalStockInput = document.getElementById('physicalStockInput');
   const differenceVal = document.getElementById('differenceVal');
@@ -584,38 +593,42 @@ document.addEventListener('DOMContentLoaded', () => {
       const tabId = cfg.id;
       const rowNum = index + 1;
       const tabName = state.tabsMeta[tabId]?.name || cfg.defaultName;
+      const safeTabName = escapeHtml(tabName);
+      const safeDefaultName = escapeHtml(cfg.defaultName);
+      const safeGroup = escapeHtml(cfg.group);
+      const safeTabId = escapeHtml(tabId);
 
       const tr = document.createElement('tr');
-      tr.setAttribute('data-reserved-row', rowNum);
-      tr.setAttribute('data-tab-id', tabId);
+      tr.setAttribute('data-reserved-row', String(rowNum));
+      tr.setAttribute('data-tab-id', safeTabId);
       tr.className = 'reserved-tab-row';
 
       tr.innerHTML = `
         <td class="row-num-cell" data-label="NUMBER">${rowNum}</td>
         <td data-label="NARRATION" data-col-idx="1">
           <div class="reserved-narration-cell">
-            <textarea class="cell-textarea col-narration" rows="1" placeholder="${cfg.defaultName}...">${tabName}</textarea>
+            <textarea class="cell-textarea col-narration" rows="1" placeholder="${safeDefaultName}...">${safeTabName}</textarea>
           </div>
         </td>
         <td data-label="1" data-col-idx="2">
-          <input type="text" class="cell-input col-1 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName} (Group ${cfg.group})">
+          <input type="text" class="cell-input col-1 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${safeTabName} (Group ${safeGroup})">
         </td>
         <td data-label="2" data-col-idx="3">
-          <input type="text" class="cell-input col-2 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName} (Group ${cfg.group})">
+          <input type="text" class="cell-input col-2 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${safeTabName} (Group ${safeGroup})">
         </td>
         <td data-label="3" data-col-idx="4">
-          <input type="text" class="cell-input col-3 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${tabName} (Group ${cfg.group})">
+          <input type="text" class="cell-input col-3 reserved-input" readonly tabindex="-1" value="—" title="Calculated in ${safeTabName} (Group ${safeGroup})">
         </td>
-        <td class="computed-cell col-4-display reserved-col-4" data-label="4" data-col-idx="5" title="Direct input disabled. Auto-calculated from ${tabName}"></td>
+        <td class="computed-cell col-4-display reserved-col-4" data-label="4" data-col-idx="5" title="Direct input disabled. Auto-calculated from ${safeTabName}"></td>
         <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
           <div class="row-actions-cell">
-            <button class="delete-row-btn reserved-delete-btn" data-tab-id="${tabId}" title="Clear ${tabName} data">
+            <button class="delete-row-btn reserved-delete-btn" data-tab-id="${safeTabId}" title="Clear ${safeTabName} data">
               <i data-lucide="eraser"></i>
             </button>
-            <button class="reserved-remove-btn" data-tab-id="${tabId}" title="Delete Tab ${tabName}">
+            <button class="reserved-remove-btn" data-tab-id="${safeTabId}" title="Delete Tab ${safeTabName}">
               <i data-lucide="trash-2"></i>
             </button>
-            <button class="reserved-jump-btn" data-jump-tab="${tabId}" title="Open ${tabName}">
+            <button class="reserved-jump-btn" data-jump-tab="${safeTabId}" title="Open ${safeTabName}">
               <i data-lucide="arrow-right"></i>
             </button>
           </div>
@@ -678,20 +691,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const c1Formatted = data.c1 !== '' ? formatTwoDecimals(data.c1) : '';
     const c2Formatted = data.c2 !== '' ? formatTwoDecimals(data.c2) : '';
     const c3Formatted = data.c3 !== '' ? formatTwoDecimals(data.c3) : '';
+    const safeNarration = escapeHtml(data.narration || '');
 
     tr.innerHTML = `
       <td class="row-num-cell" data-label="NUMBER"></td>
       <td data-label="NARRATION" data-col-idx="1">
-        <textarea class="cell-textarea col-narration" placeholder="Enter narration..." rows="1">${data.narration || ''}</textarea>
+        <textarea class="cell-textarea col-narration" placeholder="Enter narration..." rows="1">${safeNarration}</textarea>
       </td>
       <td data-label="1" data-col-idx="2">
-        <input type="text" inputmode="decimal" class="cell-input col-1" placeholder="" value="${c1Formatted}">
+        <input type="text" inputmode="decimal" class="cell-input col-1" placeholder="" value="${escapeHtml(c1Formatted)}">
       </td>
       <td data-label="2" data-col-idx="3">
-        <input type="text" inputmode="decimal" class="cell-input col-2" placeholder="" value="${c2Formatted}">
+        <input type="text" inputmode="decimal" class="cell-input col-2" placeholder="" value="${escapeHtml(c2Formatted)}">
       </td>
       <td data-label="3" data-col-idx="4">
-        <input type="text" inputmode="decimal" class="cell-input col-3" placeholder="" value="${c3Formatted}">
+        <input type="text" inputmode="decimal" class="cell-input col-3" placeholder="" value="${escapeHtml(c3Formatted)}">
       </td>
       <td class="computed-cell col-4-display" data-label="4" data-col-idx="5"></td>
       <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
@@ -924,6 +938,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     rows.forEach((r, idx) => {
       const tr = document.createElement('tr');
+      const safeCol1 = escapeHtml(r.col1 || '');
 
       if (cfg.group === 'A') {
         const col2Val = r.col2 !== '' && r.col2 !== undefined && r.col2 !== null ? r.col2 : '';
@@ -933,16 +948,16 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = `
           <td class="row-num-cell">${idx + 1}</td>
           <td data-col-idx="1">
-            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
+            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${safeCol1}</textarea>
           </td>
           <td data-col-idx="2">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${col2Val}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${escapeHtml(col2Val)}">
           </td>
           <td data-col-idx="3">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${col3Val}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${escapeHtml(col3Val)}">
           </td>
           <td data-col-idx="4">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Val}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${escapeHtml(col4Val)}">
           </td>
           <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
             <div class="row-actions-cell">
@@ -960,16 +975,16 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = `
           <td class="row-num-cell">${idx + 1}</td>
           <td data-col-idx="1">
-            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
+            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${safeCol1}</textarea>
           </td>
           <td data-col-idx="2">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${col2Formatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${escapeHtml(col2Formatted)}">
           </td>
           <td data-col-idx="3">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${col3Formatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${escapeHtml(col3Formatted)}">
           </td>
           <td data-col-idx="4">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Formatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${escapeHtml(col4Formatted)}">
           </td>
           <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
             <div class="row-actions-cell">
@@ -993,16 +1008,16 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = `
           <td class="row-num-cell">${idx + 1}</td>
           <td data-col-idx="1">
-            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
+            <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${safeCol1}</textarea>
           </td>
           <td data-col-idx="2">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${valAFormatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${escapeHtml(valAFormatted)}">
           </td>
           <td data-col-idx="3">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${valBFormatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${escapeHtml(valBFormatted)}">
           </td>
           <td class="computed-cell subtab-col-diff" data-col-idx="4">
-            ${rowDiffFormatted}
+            ${escapeHtml(rowDiffFormatted)}
           </td>
           <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
             <div class="row-actions-cell">
@@ -1268,12 +1283,12 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.className = `sidebar-tab-btn ${currentView === cfg.id ? 'active' : ''}`;
         btn.setAttribute('data-sidebar-id', cfg.id);
 
-        const valHtml = subResult.narrationOutput ? `<span class="sidebar-tab-val">${subResult.narrationOutput}</span>` : '';
+        const valHtml = subResult.narrationOutput ? `<span class="sidebar-tab-val">${escapeHtml(subResult.narrationOutput)}</span>` : '';
 
         btn.innerHTML = `
           <div class="sidebar-tab-left">
             <span class="sidebar-dot"></span>
-            <span class="sidebar-tab-name">${meta.name}</span>
+            <span class="sidebar-tab-name">${escapeHtml(meta.name)}</span>
           </div>
           ${valHtml}
         `;
@@ -2295,12 +2310,6 @@ document.addEventListener('DOMContentLoaded', () => {
       summary
     };
   }
-
-  const escapeHtml = (text) => {
-    const div = document.createElement('div');
-    div.textContent = (text === null || text === undefined) ? '' : String(text);
-    return div.innerHTML;
-  };
 
   // --- TABLE CELL RANGE SELECTION ENGINE (Excel / Sheets Multi-Column Drag) ---
   let activeRangeSelection = null;
