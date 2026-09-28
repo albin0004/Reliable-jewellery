@@ -4,7 +4,7 @@
   --bg-card: #ffffff;
   --bg-input: #fff9f6;
   --border-color: #f0cbb5;
-  --border-focus: #d66b30;
+  --border-focus: #2563eb;
   --text-primary: #4a2c1b;
   --text-secondary: #855a43;
   --text-muted: #bca290;
@@ -12,6 +12,9 @@
   --primary-color: #d66b30;
   --primary-hover: #b8531d;
   --primary-light: rgba(214, 107, 48, 0.1);
+
+  --cell-focus-blue: #2563eb;
+  --cell-focus-blue-bg: rgba(37, 99, 235, 0.08);
 
   --accent-emerald: #10b981;
   --accent-rose: #ef4444;
@@ -311,8 +314,8 @@ input[type="date"].ref-input {
 }
 
 .col-num-th {
-  width: 45px;
-  min-width: 40px;
+  width: 64px;
+  min-width: 56px;
   text-align: center;
 }
 
@@ -335,8 +338,8 @@ input[type="date"].ref-input {
 }
 
 .col-action-th {
-  width: 55px;
-  min-width: 50px;
+  width: 92px;
+  min-width: 84px;
   text-align: center;
 }
 
@@ -412,8 +415,18 @@ input[type="date"].ref-input {
   box-sizing: border-box;
 }
 
+/* Clear blue border structure for focused / selected table cells */
+.ledger-table td:focus-within {
+  position: relative;
+  z-index: 5;
+}
+
 .cell-input:focus, .cell-textarea:focus {
-  background-color: var(--primary-light);
+  background-color: var(--cell-focus-blue-bg) !important;
+  box-shadow: inset 0 0 0 2px var(--cell-focus-blue) !important;
+  outline: none !important;
+  position: relative;
+  z-index: 6;
 }
 
 /* Hide spinner in Chrome, Safari, Edge, Opera globally */
@@ -523,7 +536,11 @@ input[type="number"] {
 }
 
 .summary-table-input:focus {
-  background-color: var(--primary-light);
+  background-color: var(--cell-focus-blue-bg) !important;
+  box-shadow: inset 0 0 0 2px var(--cell-focus-blue) !important;
+  outline: none !important;
+  position: relative;
+  z-index: 6;
 }
 
 .summary-value-cell.difference-positive {
@@ -891,15 +908,16 @@ body.is-exporting-image .cell-textarea {
 }
 
 .reserved-tab-row:hover {
-  background-color: rgba(214, 107, 48, 0.05);
+  background-color: rgba(0, 0, 0, 0.02);
 }
 
 .reserved-narration-cell {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 0 0.5rem;
+  padding: 0;
   min-height: 48px;
+  width: 100%;
 }
 
 .reserved-tab-link {
@@ -959,7 +977,8 @@ body.is-exporting-image .cell-textarea {
 
 .delete-row-btn, 
 .reserved-delete-btn, 
-.subtab-delete-row-btn {
+.subtab-delete-row-btn,
+.row-palette-btn {
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -967,8 +986,8 @@ body.is-exporting-image .cell-textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
   transition: all 0.15s ease;
   padding: 0;
@@ -981,13 +1000,19 @@ body.is-exporting-image .cell-textarea {
   background-color: rgba(239, 68, 68, 0.12);
 }
 
+.row-palette-btn:hover {
+  color: var(--primary-color);
+  background-color: var(--primary-light);
+}
+
 .delete-row-btn i, .delete-row-btn svg,
 .reserved-delete-btn i, .reserved-delete-btn svg,
 .subtab-delete-row-btn i, .subtab-delete-row-btn svg,
-.reserved-jump-btn i, .reserved-jump-btn svg {
+.reserved-jump-btn i, .reserved-jump-btn svg,
+.row-palette-btn i, .row-palette-btn svg {
   pointer-events: none !important;
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .reserved-jump-btn {
@@ -1016,11 +1041,11 @@ body.is-exporting-image .cell-textarea {
    ========================================== */
 .left-tab-sidebar,
 .right-tab-sidebar {
-  width: 210px;
+  width: 190px;
   flex-shrink: 0;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: var(--shadow-sm);
   position: sticky;
   top: 1rem;
@@ -1028,22 +1053,24 @@ body.is-exporting-image .cell-textarea {
   flex-direction: column;
   overflow: hidden;
   max-height: calc(100vh - 2rem);
+  align-self: flex-start;
 }
 
 .sidebar-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.65rem 0.85rem;
+  padding: 0.4rem 0.65rem;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-input);
+  flex-shrink: 0;
 }
 
 .sidebar-title-box {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.75rem;
+  gap: 0.4rem;
+  font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1052,8 +1079,8 @@ body.is-exporting-image .cell-textarea {
 
 .sidebar-title-box i {
   color: var(--primary-color);
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .sidebar-mobile-toggle-btn {
@@ -1067,10 +1094,21 @@ body.is-exporting-image .cell-textarea {
 
 .sidebar-tab-sections {
   overflow-y: auto;
-  padding: 0.35rem 0.35rem;
+  scrollbar-width: thin;
+  padding: 0.25rem 0.35rem;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.12rem;
+  flex: 1;
+}
+
+.sidebar-tab-sections::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-tab-sections::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 4px;
 }
 
 .sidebar-tab-btn {
@@ -1078,19 +1116,20 @@ body.is-exporting-image .cell-textarea {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 0.38rem 0.6rem;
+  padding: 0.22rem 0.45rem;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
   transition: all 0.12s ease;
   user-select: none;
-  min-height: 32px;
+  min-height: 25px;
+  line-height: 1.2;
 }
 
 .sidebar-tab-btn:hover {
@@ -1110,22 +1149,24 @@ body.is-exporting-image .cell-textarea {
 .sidebar-tab-left {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .sidebar-tab-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
 }
 
 .sidebar-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background-color: var(--border-color);
   flex-shrink: 0;
@@ -1139,11 +1180,11 @@ body.is-exporting-image .cell-textarea {
 
 .sidebar-tab-val {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-secondary);
   flex-shrink: 0;
-  margin-left: 0.4rem;
+  margin-left: 0.35rem;
 }
 
 .sidebar-tab-btn.active .sidebar-tab-val {
@@ -1419,33 +1460,14 @@ body.is-exporting-image .cell-textarea {
   -webkit-user-select: none !important;
 }
 
-/* Cell cursor & text cursor for Excel-like feel */
+/* Cell cursor & text cursor */
 .ledger-table td[data-col-idx] {
-  cursor: cell;
+  cursor: default;
 }
 
 .ledger-table td[data-col-idx] .cell-input,
 .ledger-table td[data-col-idx] .cell-textarea {
   cursor: text;
-}
-
-/* Multi-Cell Drag & Range Selection Highlight (Excel / Google Sheets style) */
-.ledger-table td.cell-selected {
-  background-color: rgba(59, 130, 246, 0.16) !important;
-  box-shadow: inset 0 0 0 1.5px rgba(59, 130, 246, 0.75) !important;
-  position: relative;
-  z-index: 1;
-}
-
-.ledger-table td.cell-selected .cell-input,
-.ledger-table td.cell-selected .cell-textarea {
-  background-color: transparent !important;
-  color: #1e3a8a !important;
-}
-
-.ledger-table td.cell-selected.computed-cell {
-  background-color: rgba(59, 130, 246, 0.22) !important;
-  color: #1e3a8a !important;
 }
 /* Flash animation on successful copy */
 @keyframes copySuccessFlash {
@@ -1505,30 +1527,37 @@ body.is-exporting-image .cell-textarea {
 .sidebar-group-section {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  margin-top: 0.5rem;
-  padding-top: 0.45rem;
+  gap: 0.1rem;
+  margin-top: 0.25rem;
+  padding-top: 0.2rem;
   border-top: 1px dashed var(--border-color);
 }
 
 .sidebar-group-section:first-of-type {
-  margin-top: 0.35rem;
-  padding-top: 0.35rem;
+  margin-top: 0.15rem;
+  padding-top: 0.15rem;
 }
 
 .sidebar-group-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.25rem 0.4rem 0.25rem 0.4rem;
+  padding: 0.12rem 0.25rem;
   user-select: none;
-  gap: 0.5rem;
+  gap: 0.3rem;
 }
 
 .sidebar-group-title {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.25rem;
+}
+
+.sidebar-group-title .group-badge {
+  font-size: 0.68rem;
+  padding: 0.12rem 0.4rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .sidebar-group-add-btn {
@@ -1538,13 +1567,13 @@ body.is-exporting-image .cell-textarea {
   background: var(--bg-input);
   border: 1px solid var(--border-color);
   font-family: inherit;
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  padding: 0.2rem 0.5rem;
-  border-radius: 5px;
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  gap: 0.25rem;
+  gap: 0.15rem;
   white-space: nowrap;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
@@ -1762,4 +1791,343 @@ body.is-exporting-image .cell-textarea {
   font-size: 0.76rem;
   color: var(--text-secondary);
   line-height: 1.3;
+}
+
+/* ==========================================================================
+   ROW BACKGROUND SHADES & SELECTION STYLES (Stock Reconciliation across all tabs)
+   Four Distinct, Theme-Complementary Pastel Shades:
+   1. Warm Peach (#fff1e6) - Complements warm terracotta/peach brand theme
+   2. Mint Sage (#ecfdf5) - Complements Group B emerald/success accents
+   3. Soft Periwinkle (#eef2ff) - Complements Group C indigo/periwinkle accents
+   4. Rose Blush (#fff0f3) - Complements accent-rose & highlight differences
+   ========================================================================== */
+
+/* 1. Warm Peach / Amber Glow */
+tr[data-row-shade="peach"] td {
+  background-color: #fff1e6 !important;
+}
+tr[data-row-shade="peach"] .row-num-cell,
+tr[data-row-shade="peach"] .computed-cell {
+  background-color: #fde5d4 !important;
+}
+tr[data-row-shade="peach"]:hover td {
+  background-color: #ffe9dc !important;
+}
+
+/* 2. Soft Mint / Sage Green */
+tr[data-row-shade="mint"] td {
+  background-color: #ecfdf5 !important;
+}
+tr[data-row-shade="mint"] .row-num-cell,
+tr[data-row-shade="mint"] .computed-cell {
+  background-color: #daf5e7 !important;
+}
+tr[data-row-shade="mint"]:hover td {
+  background-color: #e2faee !important;
+}
+
+/* 3. Soft Periwinkle / Sky Blue */
+tr[data-row-shade="periwinkle"] td {
+  background-color: #eef2ff !important;
+}
+tr[data-row-shade="periwinkle"] .row-num-cell,
+tr[data-row-shade="periwinkle"] .computed-cell {
+  background-color: #dee5fc !important;
+}
+tr[data-row-shade="periwinkle"]:hover td {
+  background-color: #e6ebff !important;
+}
+
+/* 4. Rose Blush / Soft Coral */
+tr[data-row-shade="rose"] td {
+  background-color: #fff0f3 !important;
+}
+tr[data-row-shade="rose"] .row-num-cell,
+tr[data-row-shade="rose"] .computed-cell {
+  background-color: #fedee5 !important;
+}
+tr[data-row-shade="rose"]:hover td {
+  background-color: #ffe4ea !important;
+}
+
+/* Row Selection State - clean blue structure */
+tr.row-selected td {
+  background-color: rgba(37, 99, 235, 0.08) !important;
+}
+tr.row-selected .row-num-cell {
+  background-color: rgba(37, 99, 235, 0.18) !important;
+  color: #2563eb !important;
+  font-weight: 800;
+}
+
+/* Row Number Cell interactive mouse-drag selection styling */
+.row-num-cell {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.row-num-cell:hover {
+  background-color: rgba(37, 99, 235, 0.12) !important;
+}
+.row-num-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0 0.25rem;
+  min-height: 44px;
+}
+.row-num-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+/* While mouse drag selecting rows, disable text selection globally on table */
+.ledger-table.is-drag-selecting {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+.ledger-table.is-drag-selecting * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* ==========================================================================
+   STICKY ROW COLOR SELECTION PANEL (Right Side of Screen)
+   ========================================================================== */
+.sticky-color-panel {
+  position: fixed;
+  right: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 999;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(74, 44, 27, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
+  padding: 0.75rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  user-select: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sticky-color-panel:hover {
+  box-shadow: 0 14px 38px rgba(74, 44, 27, 0.18), 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.sticky-panel-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  text-align: center;
+}
+
+.sticky-palette-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--primary-color);
+}
+
+.sticky-panel-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.sticky-selection-badge {
+  background-color: var(--primary-color);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 0.1rem 0.4rem;
+  line-height: 1.1;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+}
+
+.sticky-selection-badge.hidden {
+  display: none;
+}
+
+.sticky-swatches-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sticky-swatch-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 0 0 1px var(--border-color), 0 2px 5px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+}
+
+.sticky-swatch-btn:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px var(--primary-color), 0 4px 10px rgba(0, 0, 0, 0.15);
+  z-index: 5;
+}
+
+.sticky-swatch-btn.swatch-peach {
+  background-color: #f6a574;
+}
+.sticky-swatch-btn.swatch-mint {
+  background-color: #34d399;
+}
+.sticky-swatch-btn.swatch-periwinkle {
+  background-color: #818cf8;
+}
+.sticky-swatch-btn.swatch-rose {
+  background-color: #fb7185;
+}
+
+.sticky-panel-divider {
+  width: 24px;
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 0.15rem 0;
+}
+
+.sticky-actions-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sticky-action-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.sticky-action-btn:hover {
+  background-color: rgba(214, 107, 48, 0.12);
+  color: var(--primary-color);
+  border-color: rgba(214, 107, 48, 0.25);
+}
+
+.sticky-reset-all-btn:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--accent-rose);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.sticky-action-btn i, .sticky-action-btn svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+/* Tooltips floating to the left of the sticky dock */
+.sticky-swatch-btn .swatch-tooltip,
+.sticky-action-btn .action-tooltip {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #332014;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.sticky-swatch-btn:hover .swatch-tooltip,
+.sticky-action-btn:hover .action-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(-2px);
+}
+
+/* Floating Row Palette Popover (Inline on row) */
+.row-palette-popover {
+  position: absolute;
+  z-index: 1050;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(74, 44, 27, 0.18);
+  padding: 0.35rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  animation: popoverFadeIn 0.15s ease-out;
+}
+@keyframes popoverFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   DRAG AND DROP FOR GROUP B (Stock Reconciliation item & tab rearranging)
+   ========================================================================== */
+.row-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--text-muted);
+  width: 18px;
+  height: 24px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+.row-drag-handle:hover {
+  color: var(--primary-color);
+  background-color: var(--primary-light);
+}
+.row-drag-handle:active {
+  cursor: grabbing;
+}
+.row-drag-handle i, .row-drag-handle svg {
+  width: 15px;
+  height: 15px;
+  pointer-events: none;
+}
+tr.is-dragging {
+  opacity: 0.45;
+  background-color: var(--primary-light) !important;
+}
+tr.drag-over-top td {
+  border-top: 3px solid var(--primary-color) !important;
+}
+tr.drag-over-bottom td {
+  border-bottom: 3px solid var(--primary-color) !important;
 }

@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     DOC_DATE: 'narration_doc_date_v9',
     TABS_META: 'narration_tabs_meta_v9',
     TABS_DATA: 'narration_tabs_data_v9',
+    RESERVED_SHADES: 'narration_reserved_shades_v9',
     // Fallback legacy keys
     LEGACY_ROWS_V8: 'narration_reconciliation_rows_v8',
     LEGACY_META_V8: 'narration_tabs_meta_v8',
@@ -72,6 +73,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Global Application State ---
   let currentView = 'narration'; // 'narration' or sub-tab ID
+  let draggedNarrationTabId = null;
+  let draggedSubTabRowIndex = null;
+  let lastSelectedNarrationRow = null;
+  let lastSelectedSubTabRow = null;
 
   const state = {
     narration: {
@@ -635,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Build all Reserved Rows in Narration Table for all configured sub-tabs
   function buildReservedRows() {
+    clearRowSelection();
     // Collect existing manual rows before rebuilding
     const manualRowsData = [];
     const manualRowEls = tableBody.querySelectorAll('tr:not([data-reserved-row])');
@@ -643,11 +649,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const c1Raw = row.querySelector('.col-1')?.value || '';
       const c2Raw = row.querySelector('.col-2')?.value || '';
       const c3Raw = row.querySelector('.col-3')?.value || '';
+      const shade = row.getAttribute('data-row-shade') || '';
       manualRowsData.push({
         narration,
         c1: c1Raw !== '' ? formatTwoDecimals(c1Raw) : '',
         c2: c2Raw !== '' ? formatTwoDecimals(c2Raw) : '',
-        c3: c3Raw !== '' ? formatTwoDecimals(c3Raw) : ''
+        c3: c3Raw !== '' ? formatTwoDecimals(c3Raw) : '',
+        shade
       });
     });
 
@@ -657,14 +665,25 @@ document.addEventListener('DOMContentLoaded', () => {
       const tabId = cfg.id;
       const rowNum = index + 1;
       const tabName = state.tabsMeta[tabId]?.name || cfg.defaultName;
+      const isGroupB = cfg.group === 'B';
+      const shade = state.tabsMeta[tabId]?.rowShade || (state.narration.reservedShades && state.narration.reservedShades[tabId]) || '';
 
       const tr = document.createElement('tr');
       tr.setAttribute('data-reserved-row', rowNum);
       tr.setAttribute('data-tab-id', tabId);
-      tr.className = 'reserved-tab-row';
+      tr.className = `reserved-tab-row ${isGroupB ? 'group-b-row' : ''}`;
+      if (shade) tr.setAttribute('data-row-shade', shade);
 
       tr.innerHTML = `
-        <td class="row-num-cell" data-label="NUMBER">${rowNum}</td>
+        <td class="row-num-cell" data-label="NUMBER">
+          <div class="row-num-wrapper">
+            ${isGroupB ? `
+              <span class="row-drag-handle narration-group-b-drag" draggable="true" title="Drag to rearrange Group B tab in reconciliation" data-html2canvas-ignore="true">
+                <i data-lucide="grip-vertical"></i>
+              </span>` : ''}
+            <span class="row-num-text">${rowNum}</span>
+          </div>
+        </td>
         <td data-label="NARRATION" data-col-idx="1">
           <div class="reserved-narration-cell">
             <textarea class="cell-textarea col-narration" rows="1" placeholder="${cfg.defaultName}...">${tabName}</textarea>
@@ -682,6 +701,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <td class="computed-cell col-4-display reserved-col-4" data-label="4" data-col-idx="5" title="Direct input disabled. Auto-calculated from ${tabName}"></td>
         <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
           <div class="row-actions-cell">
+            <button class="row-palette-btn narration-palette-btn" data-tab-id="${tabId}" title="Change row color">
+              <i data-lucide="palette"></i>
+            </button>
             <button class="reserved-remove-btn" data-tab-id="${tabId}" title="Delete Tab ${tabName}">
               <i data-lucide="trash-2"></i>
             </button>
@@ -714,6 +736,77 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteDynamicTab(tabId);
       });
 
+      // Drag and drop for Group B tab rows in Narration table
+      if (isGroupB) {
+        const handle = tr.querySelector('.narration-group-b-drag');
+        if (handle) {
+          handle.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            draggedNarrationTabId = tabId;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', tabId);
+            tr.classList.add('is-dragging');
+          });
+
+          handle.addEventListener('dragend', () => {
+            tr.classList.remove('is-dragging');
+            tableBody.querySelectorAll('tr').forEach(r => {
+              r.classList.remove('drag-over-top', 'drag-over-bottom', 'is-dragging');
+            });
+            draggedNarrationTabId = null;
+          });
+        }
+
+        tr.addEventListener('dragover', (e) => {
+          if (!draggedNarrationTabId) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          const rect = tr.getBoundingClientRect();
+          const isAbove = e.clientY < rect.top + rect.height / 2;
+          tr.classList.toggle('drag-over-top', isAbove);
+          tr.classList.toggle('drag-over-bottom', !isAbove);
+        });
+
+        tr.addEventListener('dragleave', () => {
+          tr.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
+
+        tr.addEventListener('drop', (e) => {
+          if (!draggedNarrationTabId) return;
+          e.preventDefault();
+          tr.classList.remove('drag-over-top', 'drag-over-bottom');
+          if (draggedNarrationTabId === tabId) return;
+
+          const fromIdx = tabsConfig.findIndex(t => t.id === draggedNarrationTabId);
+          const toIdx = tabsConfig.findIndex(t => t.id === tabId);
+          if (fromIdx === -1 || toIdx === -1) return;
+
+          const rect = tr.getBoundingClientRect();
+          const isAbove = e.clientY < rect.top + rect.height / 2;
+
+          const movedTab = tabsConfig.splice(fromIdx, 1)[0];
+          let insertIdx = toIdx;
+          if (fromIdx < toIdx) {
+            insertIdx = isAbove ? toIdx - 1 : toIdx;
+          } else {
+            insertIdx = isAbove ? toIdx : toIdx + 1;
+          }
+          tabsConfig.splice(insertIdx, 0, movedTab);
+
+          // Re-index tab numbers (1..N) to match sequence
+          tabsConfig.forEach((t, idx) => {
+            t.num = idx + 1;
+          });
+          state.tabsConfig = tabsConfig;
+
+          buildReservedRows();
+          buildSidebar();
+          calculateReconciliation(true);
+          saveStateAndSync();
+          showToast('Group B tabs rearranged.');
+        });
+      }
+
       tableBody.appendChild(tr);
     });
 
@@ -724,16 +817,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Build Manual Row (Row after reserved rows)
-  function createManualRowElement(data = { narration: '', c1: '', c2: '', c3: '' }) {
+  function createManualRowElement(data = { narration: '', c1: '', c2: '', c3: '', shade: '' }) {
     const tr = document.createElement('tr');
     tr.className = 'manual-row';
+    if (data.shade) tr.setAttribute('data-row-shade', data.shade);
 
     const c1Formatted = data.c1 !== '' ? formatTwoDecimals(data.c1) : '';
     const c2Formatted = data.c2 !== '' ? formatTwoDecimals(data.c2) : '';
     const c3Formatted = data.c3 !== '' ? formatTwoDecimals(data.c3) : '';
 
     tr.innerHTML = `
-      <td class="row-num-cell" data-label="NUMBER"></td>
+      <td class="row-num-cell" data-label="NUMBER">
+        <div class="row-num-wrapper">
+          <span class="row-num-text"></span>
+        </div>
+      </td>
       <td data-label="NARRATION" data-col-idx="1">
         <textarea class="cell-textarea col-narration" placeholder="Enter narration..." rows="1">${data.narration || ''}</textarea>
       </td>
@@ -749,6 +847,9 @@ document.addEventListener('DOMContentLoaded', () => {
       <td class="computed-cell col-4-display" data-label="4" data-col-idx="5"></td>
       <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
         <div class="row-actions-cell">
+          <button class="row-palette-btn manual-palette-btn" title="Change row color">
+            <i data-lucide="palette"></i>
+          </button>
           <button class="delete-row-btn manual-delete-btn" title="Delete Row">
             <i data-lucide="trash-2"></i>
           </button>
@@ -783,6 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Delete manual row directly
     tr.querySelector('.manual-delete-btn').addEventListener('click', (e) => {
       e.stopPropagation();
+      clearRowSelection();
       tr.remove();
       updateRowIndices();
       calculateReconciliation(true);
@@ -798,7 +900,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateRowIndices() {
     const rows = tableBody.querySelectorAll('tr');
     rows.forEach((row, index) => {
-      const numCell = row.querySelector('.row-num-cell');
+      const numCell = row.querySelector('.row-num-text') || row.querySelector('.row-num-cell');
       if (numCell) numCell.textContent = index + 1;
     });
   }
@@ -975,8 +1077,39 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!subTabTableBody) return;
     subTabTableBody.innerHTML = '';
 
+    const isGroupB = cfg.group === 'B';
+
     rows.forEach((r, idx) => {
       const tr = document.createElement('tr');
+      tr.className = `subtab-row ${isGroupB ? 'group-b-subtab-row' : ''}`;
+      tr.setAttribute('data-row-idx', idx);
+      const shade = r.shade || '';
+      if (shade) tr.setAttribute('data-row-shade', shade);
+
+      const rowNumHtml = `
+        <td class="row-num-cell" data-label="NUMBER">
+          <div class="row-num-wrapper">
+            ${isGroupB ? `
+              <span class="row-drag-handle subtab-drag-handle" draggable="true" title="Drag to rearrange item" data-html2canvas-ignore="true">
+                <i data-lucide="grip-vertical"></i>
+              </span>` : ''}
+            <span class="row-num-text">${idx + 1}</span>
+          </div>
+        </td>
+      `;
+
+      const actionsHtml = `
+        <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
+          <div class="row-actions-cell">
+            <button class="row-palette-btn subtab-palette-btn" data-row-index="${idx}" title="Change row color">
+              <i data-lucide="palette"></i>
+            </button>
+            <button class="delete-row-btn subtab-delete-row-btn" data-row-index="${idx}" title="Delete Row">
+              <i data-lucide="trash-2"></i>
+            </button>
+          </div>
+        </td>
+      `;
 
       if (cfg.group === 'A') {
         const col2Val = r.col2 !== '' && r.col2 !== undefined && r.col2 !== null ? r.col2 : '';
@@ -984,7 +1117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const col4Val = r.col4 !== '' && r.col4 !== undefined && r.col4 !== null ? r.col4 : '';
 
         tr.innerHTML = `
-          <td class="row-num-cell">${idx + 1}</td>
+          ${rowNumHtml}
           <td data-col-idx="1">
             <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
@@ -997,13 +1130,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td data-col-idx="4">
             <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Val}">
           </td>
-          <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
-            <div class="row-actions-cell">
-              <button class="delete-row-btn subtab-delete-row-btn" data-row-index="${idx}" title="Delete Row">
-                <i data-lucide="trash-2"></i>
-              </button>
-            </div>
-          </td>
+          ${actionsHtml}
         `;
       } else if (cfg.group === 'B') {
         const col2Formatted = r.col2 !== '' ? formatTwoDecimals(r.col2) : '';
@@ -1011,7 +1138,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const col4Formatted = r.col4 !== '' ? formatTwoDecimals(r.col4) : '';
 
         tr.innerHTML = `
-          <td class="row-num-cell">${idx + 1}</td>
+          ${rowNumHtml}
           <td data-col-idx="1">
             <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
@@ -1024,13 +1151,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td data-col-idx="4">
             <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Formatted}">
           </td>
-          <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
-            <div class="row-actions-cell">
-              <button class="delete-row-btn subtab-delete-row-btn" data-row-index="${idx}" title="Delete Row">
-                <i data-lucide="trash-2"></i>
-              </button>
-            </div>
-          </td>
+          ${actionsHtml}
         `;
       } else if (cfg.group === 'C') {
         const valAFormatted = r.col2 !== '' ? formatTwoDecimals(r.col2) : '';
@@ -1044,7 +1165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         tr.innerHTML = `
-          <td class="row-num-cell">${idx + 1}</td>
+          ${rowNumHtml}
           <td data-col-idx="1">
             <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
@@ -1057,13 +1178,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td class="computed-cell subtab-col-diff" data-col-idx="4">
             ${rowDiffFormatted}
           </td>
-          <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
-            <div class="row-actions-cell">
-              <button class="delete-row-btn subtab-delete-row-btn" data-row-index="${idx}" title="Delete Row">
-                <i data-lucide="trash-2"></i>
-              </button>
-            </div>
-          </td>
+          ${actionsHtml}
         `;
       }
 
@@ -1078,7 +1193,8 @@ document.addEventListener('DOMContentLoaded', () => {
           col1: col1Input?.value || '',
           col2: col2Input?.value || '',
           col3: col3Input?.value || '',
-          col4: col4Input ? col4Input.value : ''
+          col4: col4Input ? col4Input.value : '',
+          shade: tr.getAttribute('data-row-shade') || ''
         };
 
         invalidateSubTab(cfg.id);
@@ -1128,9 +1244,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // Delete row button
       tr.querySelector('.subtab-delete-row-btn').addEventListener('click', (e) => {
         e.stopPropagation();
+        clearRowSelection();
         state.tabsData[cfg.id].splice(idx, 1);
         if (state.tabsData[cfg.id].length === 0) {
-          state.tabsData[cfg.id].push({ col1: '', col2: '', col3: '', col4: '' });
+          state.tabsData[cfg.id].push({ col1: '', col2: '', col3: '', col4: '', shade: '' });
         }
         invalidateSubTab(cfg.id);
         renderActiveSubTabView();
@@ -1138,6 +1255,76 @@ document.addEventListener('DOMContentLoaded', () => {
         flushPendingSync();
         showToast('Row deleted.');
       });
+
+      // Drag and drop for Group B item rows
+      if (isGroupB) {
+        const handle = tr.querySelector('.subtab-drag-handle');
+        if (handle) {
+          handle.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            draggedSubTabRowIndex = idx;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(idx));
+            tr.classList.add('is-dragging');
+          });
+
+          handle.addEventListener('dragend', () => {
+            tr.classList.remove('is-dragging');
+            if (subTabTableBody) {
+              subTabTableBody.querySelectorAll('tr').forEach(r => {
+                r.classList.remove('drag-over-top', 'drag-over-bottom', 'is-dragging');
+              });
+            }
+            draggedSubTabRowIndex = null;
+          });
+        }
+
+        tr.addEventListener('dragover', (e) => {
+          if (draggedSubTabRowIndex === null) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          const rect = tr.getBoundingClientRect();
+          const isAbove = e.clientY < rect.top + rect.height / 2;
+          tr.classList.toggle('drag-over-top', isAbove);
+          tr.classList.toggle('drag-over-bottom', !isAbove);
+        });
+
+        tr.addEventListener('dragleave', () => {
+          tr.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
+
+        tr.addEventListener('drop', (e) => {
+          if (draggedSubTabRowIndex === null) return;
+          e.preventDefault();
+          tr.classList.remove('drag-over-top', 'drag-over-bottom');
+          const targetIdx = idx;
+          if (draggedSubTabRowIndex === targetIdx) return;
+
+          const rect = tr.getBoundingClientRect();
+          const isAbove = e.clientY < rect.top + rect.height / 2;
+
+          const tabData = state.tabsData[cfg.id];
+          if (!tabData) return;
+
+          const movedItem = tabData.splice(draggedSubTabRowIndex, 1)[0];
+          let newInsertIdx = targetIdx;
+          if (draggedSubTabRowIndex < targetIdx) {
+            newInsertIdx = isAbove ? targetIdx - 1 : targetIdx;
+          } else {
+            newInsertIdx = isAbove ? targetIdx : targetIdx + 1;
+          }
+          if (newInsertIdx < 0) newInsertIdx = 0;
+          if (newInsertIdx > tabData.length) newInsertIdx = tabData.length;
+
+          tabData.splice(newInsertIdx, 0, movedItem);
+
+          invalidateSubTab(cfg.id);
+          renderActiveSubTabView();
+          calculateReconciliation(true);
+          saveStateAndSync();
+          showToast('Items rearranged successfully.');
+        });
+      }
 
       subTabTableBody.appendChild(tr);
     });
@@ -1228,6 +1415,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function switchView(viewId) {
     currentView = viewId;
+    if (typeof clearRowSelection === 'function') clearRowSelection();
 
     if (viewId === 'narration') {
       narrationView.classList.remove('hidden');
@@ -1742,12 +1930,24 @@ document.addEventListener('DOMContentLoaded', () => {
       const c1Raw = row.querySelector('.col-1')?.value || '';
       const c2Raw = row.querySelector('.col-2')?.value || '';
       const c3Raw = row.querySelector('.col-3')?.value || '';
+      const shade = row.getAttribute('data-row-shade') || '';
       manualRows.push({
         narration,
         c1: c1Raw !== '' ? formatTwoDecimals(c1Raw) : '',
         c2: c2Raw !== '' ? formatTwoDecimals(c2Raw) : '',
-        c3: c3Raw !== '' ? formatTwoDecimals(c3Raw) : ''
+        c3: c3Raw !== '' ? formatTwoDecimals(c3Raw) : '',
+        shade
       });
+    });
+
+    const reservedRowShades = {};
+    tableBody.querySelectorAll('tr[data-reserved-row]').forEach(row => {
+      const tabId = row.getAttribute('data-tab-id');
+      const shade = row.getAttribute('data-row-shade') || '';
+      if (tabId && shade) {
+        reservedRowShades[tabId] = shade;
+        if (state.tabsMeta[tabId]) state.tabsMeta[tabId].rowShade = shade;
+      }
     });
 
     return {
@@ -1755,7 +1955,8 @@ document.addEventListener('DOMContentLoaded', () => {
         physicalStock: physicalStockInput.value,
         referenceNo: referenceInput.value,
         docDate: docDateInput.value,
-        rows11Plus: manualRows
+        rows11Plus: manualRows,
+        reservedRowShades
       },
       tabsConfig: tabsConfig,
       tabsMeta: state.tabsMeta,
@@ -1778,6 +1979,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem(STORAGE_KEYS.ROWS_DATA, JSON.stringify(payload.narration.rows11Plus));
       localStorage.setItem(STORAGE_KEYS.TABS_META, JSON.stringify(payload.tabsMeta));
       localStorage.setItem(STORAGE_KEYS.TABS_DATA, JSON.stringify(payload.tabsData));
+      localStorage.setItem(STORAGE_KEYS.RESERVED_SHADES, JSON.stringify(payload.narration.reservedRowShades || {}));
     } catch (e) {
       console.warn('LocalStorage save warning:', e);
     }
@@ -1868,6 +2070,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (c3 && document.activeElement !== c3 && c3.value !== (r.c3 || '')) {
         c3.value = r.c3 || '';
+      }
+      if (r.shade) {
+        tr.setAttribute('data-row-shade', r.shade);
+      } else {
+        tr.removeAttribute('data-row-shade');
       }
     }
 
@@ -2008,6 +2215,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (Array.isArray(data.narration.rows11Plus)) {
         syncManualRowsDOM(data.narration.rows11Plus);
       }
+
+      if (data.narration.reservedRowShades && typeof data.narration.reservedRowShades === 'object') {
+        Object.keys(data.narration.reservedRowShades).forEach(tId => {
+          if (state.tabsMeta[tId]) state.tabsMeta[tId].rowShade = data.narration.reservedRowShades[tId];
+          const tr = tableBody.querySelector(`tr[data-tab-id="${tId}"]`);
+          if (tr) {
+            const sh = data.narration.reservedRowShades[tId];
+            if (sh) tr.setAttribute('data-row-shade', sh);
+            else tr.removeAttribute('data-row-shade');
+          }
+        });
+      }
     }
 
     // 5. Update UI in-place
@@ -2025,6 +2244,448 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateSidebarValues();
+  }
+
+  // --- ROW COLORING & ROW SELECTION CONTROLLER ---
+  let activeFloatingPopover = null;
+
+  function getShadeDisplayName(shade) {
+    switch (shade) {
+      case 'peach': return 'Warm Peach';
+      case 'mint': return 'Mint Sage';
+      case 'periwinkle': return 'Soft Periwinkle';
+      case 'rose': return 'Rose Blush';
+      default: return 'Default Color';
+    }
+  }
+
+  function getActiveTableBody() {
+    if (currentView === 'narration') {
+      return tableBody;
+    } else {
+      return subTabTableBody;
+    }
+  }
+
+  function getSelectedRows() {
+    const tbody = getActiveTableBody();
+    if (!tbody) return [];
+    return Array.from(tbody.querySelectorAll('tr.row-selected'));
+  }
+
+  function clearRowSelection() {
+    document.querySelectorAll('tr.row-selected, .ledger-table tr.row-selected').forEach(tr => {
+      tr.classList.remove('row-selected');
+    });
+    lastSelectedNarrationRow = null;
+    lastSelectedSubTabRow = null;
+    updateRowSelectionBadges();
+    closeFloatingPalette();
+  }
+
+  function updateRowSelectionBadges() {
+    const narrBadge = document.getElementById('narrationSelectedCount');
+    const subBadge = document.getElementById('subTabSelectedCount');
+    const stickyBadge = document.getElementById('stickySelectionBadge');
+
+    const narrSelected = tableBody ? tableBody.querySelectorAll('tr.row-selected').length : 0;
+    const subSelected = subTabTableBody ? subTabTableBody.querySelectorAll('tr.row-selected').length : 0;
+    const activeSelected = (currentView === 'narration') ? narrSelected : subSelected;
+
+    if (narrBadge) {
+      narrBadge.textContent = `${narrSelected} selected`;
+      narrBadge.classList.toggle('hidden', narrSelected === 0);
+    }
+    if (subBadge) {
+      subBadge.textContent = `${subSelected} selected`;
+      subBadge.classList.toggle('hidden', subSelected === 0);
+    }
+    if (stickyBadge) {
+      stickyBadge.textContent = `${activeSelected}`;
+      stickyBadge.classList.toggle('hidden', activeSelected === 0);
+    }
+  }
+
+  function applyShadeToRows(targetRows, shade) {
+    if (!targetRows || targetRows.length === 0) return;
+
+    targetRows.forEach(tr => {
+      if (shade) {
+        tr.setAttribute('data-row-shade', shade);
+      } else {
+        tr.removeAttribute('data-row-shade');
+      }
+
+      // Check if it's reserved row in Narration table
+      const tabId = tr.getAttribute('data-tab-id');
+      if (tabId) {
+        if (!state.tabsMeta[tabId]) state.tabsMeta[tabId] = {};
+        state.tabsMeta[tabId].rowShade = shade;
+      }
+
+      // Check if it's manual row in Narration table
+      if (tr.classList.contains('manual-row')) {
+        const manualRows = Array.from(tableBody.querySelectorAll('tr.manual-row'));
+        const mIdx = manualRows.indexOf(tr);
+        if (mIdx !== -1 && state.narration.rows11Plus && state.narration.rows11Plus[mIdx]) {
+          state.narration.rows11Plus[mIdx].shade = shade;
+        }
+      }
+
+      // Check if it's subtab row
+      if (tr.classList.contains('subtab-row') && currentView.startsWith('tab')) {
+        const rIdx = parseInt(tr.getAttribute('data-row-idx'), 10);
+        if (!isNaN(rIdx) && state.tabsData[currentView] && state.tabsData[currentView][rIdx]) {
+          state.tabsData[currentView][rIdx].shade = shade;
+        }
+      }
+    });
+
+    saveStateAndSync();
+    clearRowSelection();
+
+    const name = getShadeDisplayName(shade);
+    if (shade) {
+      showToast(`${name} applied to ${targetRows.length} row(s).`);
+    } else {
+      showToast(`Cleared background color for ${targetRows.length} row(s).`);
+    }
+  }
+
+  function closeFloatingPalette() {
+    if (activeFloatingPopover) {
+      activeFloatingPopover.remove();
+      activeFloatingPopover = null;
+    }
+  }
+
+  function openFloatingPalette(btn, tr) {
+    closeFloatingPalette();
+
+    const popover = document.createElement('div');
+    popover.className = 'row-palette-popover no-capture-cell';
+    popover.setAttribute('data-html2canvas-ignore', 'true');
+
+    popover.innerHTML = `
+      <button type="button" class="swatch-btn swatch-peach" data-popover-shade="peach" title="Warm Peach" aria-label="Warm Peach"></button>
+      <button type="button" class="swatch-btn swatch-mint" data-popover-shade="mint" title="Mint Sage" aria-label="Mint Sage"></button>
+      <button type="button" class="swatch-btn swatch-periwinkle" data-popover-shade="periwinkle" title="Soft Periwinkle" aria-label="Soft Periwinkle"></button>
+      <button type="button" class="swatch-btn swatch-rose" data-popover-shade="rose" title="Rose Blush" aria-label="Rose Blush"></button>
+    `;
+
+    document.body.appendChild(popover);
+    refreshIcons(popover);
+
+    const btnRect = btn.getBoundingClientRect();
+    const popoverRect = popover.getBoundingClientRect();
+
+    let top = btnRect.bottom + window.scrollY + 4;
+    let left = btnRect.right + window.scrollX - popoverRect.width;
+    if (left < 10) left = 10;
+    if (top + popoverRect.height > window.innerHeight + window.scrollY) {
+      top = btnRect.top + window.scrollY - popoverRect.height - 4;
+    }
+
+    popover.style.top = top + 'px';
+    popover.style.left = left + 'px';
+
+    popover.querySelectorAll('[data-popover-shade]').forEach(swatch => {
+      swatch.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const shade = swatch.getAttribute('data-popover-shade');
+        const selected = getSelectedRows();
+        const targets = (selected.length > 0 && selected.includes(tr)) ? selected : [tr];
+        applyShadeToRows(targets, shade);
+        closeFloatingPalette();
+      });
+    });
+
+    activeFloatingPopover = popover;
+  }
+
+  function initRowColorAndSelectionEngine() {
+    // 1. Sticky Color Selection Panel (Right side of screen)
+    const stickyPanel = document.getElementById('stickyColorPanel');
+    if (stickyPanel) {
+      // Swatches: apply chosen color to selected rows
+      stickyPanel.querySelectorAll('.sticky-swatch-btn[data-shade]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const shade = btn.getAttribute('data-shade') || '';
+          const selected = getSelectedRows();
+
+          if (selected.length === 0) {
+            showToast('Click or drag row numbers (No.) to select rows first.');
+            return;
+          }
+
+          applyShadeToRows(selected, shade);
+        });
+      });
+
+      // Reset Selected button: reverts selected row colors to default
+      const resetSelBtn = document.getElementById('stickyResetSelectedBtn');
+      if (resetSelBtn) {
+        resetSelBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const selected = getSelectedRows();
+          if (selected.length === 0) {
+            showToast('No rows selected to reset. Drag row numbers to select.');
+            return;
+          }
+          applyShadeToRows(selected, '');
+        });
+      }
+
+      // Reset All Rows button: reverts all row colors in active sheet to default theme
+      const resetAllBtn = document.getElementById('stickyResetAllBtn');
+      if (resetAllBtn) {
+        resetAllBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (currentView === 'narration') {
+            // Revert all reserved rows in reconciliation
+            Object.keys(state.tabsMeta).forEach(tId => {
+              if (state.tabsMeta[tId]) {
+                delete state.tabsMeta[tId].rowShade;
+              }
+            });
+            // Revert all manual rows
+            if (Array.isArray(state.narration.rows11Plus)) {
+              state.narration.rows11Plus.forEach(r => {
+                if (r) delete r.shade;
+              });
+            }
+            try {
+              localStorage.removeItem(STORAGE_KEYS.RESERVED_SHADES);
+            } catch (err) {}
+            if (tableBody) {
+              tableBody.querySelectorAll('tr[data-row-shade]').forEach(tr => {
+                tr.removeAttribute('data-row-shade');
+              });
+            }
+          } else if (currentView.startsWith('tab')) {
+            // Revert all rows in active subtab
+            const tabRows = state.tabsData[currentView];
+            if (Array.isArray(tabRows)) {
+              tabRows.forEach(r => {
+                if (r) delete r.shade;
+              });
+            }
+            if (subTabTableBody) {
+              subTabTableBody.querySelectorAll('tr[data-row-shade]').forEach(tr => {
+                tr.removeAttribute('data-row-shade');
+              });
+            }
+          }
+          saveStateAndSync();
+          showToast('All row colors reverted to default theme.');
+        });
+      }
+
+      // Selection Badge: click to clear row selection
+      const badge = document.getElementById('stickySelectionBadge');
+      if (badge) {
+        badge.title = 'Click to clear row selection';
+        badge.style.cursor = 'pointer';
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          clearRowSelection();
+        });
+      }
+    }
+
+    // 2. Mouse-based Drag Selection Engine (Exclusively from Number column)
+    let isRowDragSelecting = false;
+    let dragSelectStartTr = null;
+    let dragSelectTbody = null;
+    let isCtrlDrag = false;
+    let ctrlDragTargetState = true;
+    let dragInitialSelection = new Set();
+    let lastHoveredTr = null;
+
+    // A. Mousedown listener
+    document.addEventListener('mousedown', (e) => {
+      // Primary mouse button only
+      if (e.button !== 0) return;
+
+      const numCell = e.target.closest('.row-num-cell');
+      const isStickyPanel = e.target.closest('#stickyColorPanel');
+      const isPopover = e.target.closest('.row-palette-popover');
+      const isPaletteBtn = e.target.closest('.row-palette-btn');
+
+      // If the user clicks anywhere that is NOT the row number cell,
+      // NOT the sticky color dock, NOT the palette popover, and NOT a palette button:
+      // immediately clear any active row selections!
+      if (!numCell && !isStickyPanel && !isPopover && !isPaletteBtn) {
+        clearRowSelection();
+      }
+
+      // Exclude Group B reordering drag handle
+      if (e.target.closest('.row-drag-handle')) return;
+
+      if (!numCell) return;
+
+      const tr = numCell.closest('tr');
+      if (!tr) return;
+      const tbody = tr.closest('tbody');
+      if (!tbody) return;
+
+      const isNarration = (tbody === tableBody);
+      const allRows = Array.from(tbody.querySelectorAll('tr'));
+      const currentIdx = allRows.indexOf(tr);
+      if (currentIdx === -1) return;
+
+      closeFloatingPalette();
+
+      let lastRow = isNarration ? lastSelectedNarrationRow : lastSelectedSubTabRow;
+
+      // Shift-click range selection
+      if (e.shiftKey && lastRow && tbody.contains(lastRow)) {
+        const lastIdx = allRows.indexOf(lastRow);
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        for (let i = start; i <= end; i++) {
+          allRows[i].classList.add('row-selected');
+        }
+        if (isNarration) lastSelectedNarrationRow = tr;
+        else lastSelectedSubTabRow = tr;
+        updateRowSelectionBadges();
+        e.preventDefault();
+        return;
+      }
+
+      // Ctrl / Cmd modifier: toggle target row and allow ctrl-drag
+      if (e.ctrlKey || e.metaKey) {
+        isCtrlDrag = true;
+        ctrlDragTargetState = !tr.classList.contains('row-selected');
+        tr.classList.toggle('row-selected', ctrlDragTargetState);
+        dragInitialSelection = new Set(tbody.querySelectorAll('tr.row-selected'));
+      } else {
+        // Standard click / drag-start: clear other selections
+        isCtrlDrag = false;
+        document.querySelectorAll('.ledger-table tr.row-selected, tr.row-selected').forEach(r => {
+          if (r !== tr) r.classList.remove('row-selected');
+        });
+        tr.classList.add('row-selected');
+        dragInitialSelection = new Set([tr]);
+      }
+
+      // Initialize drag-selection tracking
+      isRowDragSelecting = true;
+      dragSelectStartTr = tr;
+      dragSelectTbody = tbody;
+      lastHoveredTr = tr;
+
+      if (isNarration) lastSelectedNarrationRow = tr;
+      else lastSelectedSubTabRow = tr;
+
+      const table = tbody.closest('.ledger-table');
+      if (table) table.classList.add('is-drag-selecting');
+
+      updateRowSelectionBadges();
+      e.preventDefault(); // Prevent text highlighting while drag-selecting rows
+    });
+
+    // B. Focusin listener: clears row selection when navigating or typing in cells
+    document.addEventListener('focusin', (e) => {
+      if (e.target.closest('input, textarea, select')) {
+        clearRowSelection();
+      }
+    });
+
+    // C. Mouseover: Expand or contract row range while dragging
+    document.addEventListener('mouseover', (e) => {
+      if (!isRowDragSelecting || !dragSelectTbody || !dragSelectStartTr) return;
+
+      // Find row under mouse within the active tbody
+      const tr = e.target.closest('tr');
+      if (!tr || tr.closest('tbody') !== dragSelectTbody) return;
+      if (tr === lastHoveredTr) return;
+      lastHoveredTr = tr;
+
+      const allRows = Array.from(dragSelectTbody.querySelectorAll('tr'));
+      const startIdx = allRows.indexOf(dragSelectStartTr);
+      const currentIdx = allRows.indexOf(tr);
+      if (startIdx === -1 || currentIdx === -1) return;
+
+      const minIdx = Math.min(startIdx, currentIdx);
+      const maxIdx = Math.max(startIdx, currentIdx);
+
+      if (isCtrlDrag) {
+        allRows.forEach((row, i) => {
+          if (i >= minIdx && i <= maxIdx) {
+            row.classList.toggle('row-selected', ctrlDragTargetState);
+          } else {
+            row.classList.toggle('row-selected', dragInitialSelection.has(row));
+          }
+        });
+      } else {
+        allRows.forEach((row, i) => {
+          if (i >= minIdx && i <= maxIdx) {
+            row.classList.add('row-selected');
+          } else {
+            row.classList.remove('row-selected');
+          }
+        });
+      }
+
+      updateRowSelectionBadges();
+    });
+
+    // D. Mouseup / Blur / Mouseleave: Complete row drag-selection
+    const endRowDragSelection = () => {
+      if (isRowDragSelecting) {
+        isRowDragSelecting = false;
+        document.querySelectorAll('.ledger-table.is-drag-selecting').forEach(tbl => {
+          tbl.classList.remove('is-drag-selecting');
+        });
+        if (lastHoveredTr && dragSelectTbody) {
+          if (dragSelectTbody === tableBody) lastSelectedNarrationRow = lastHoveredTr;
+          else lastSelectedSubTabRow = lastHoveredTr;
+        }
+        dragSelectStartTr = null;
+        dragSelectTbody = null;
+        lastHoveredTr = null;
+        updateRowSelectionBadges();
+      }
+    };
+
+    document.addEventListener('mouseup', endRowDragSelection);
+    window.addEventListener('blur', endRowDragSelection);
+    document.addEventListener('mouseleave', endRowDragSelection);
+
+    // 3. Document Click for Inline Palette Button & Outside Popover Dismissal
+    document.addEventListener('click', (e) => {
+      // Inline row palette button
+      const paletteBtn = e.target.closest('.row-palette-btn');
+      if (paletteBtn) {
+        e.stopPropagation();
+        const tr = paletteBtn.closest('tr');
+        if (tr) {
+          if (activeFloatingPopover && activeFloatingPopover._triggerBtn === paletteBtn) {
+            closeFloatingPalette();
+          } else {
+            openFloatingPalette(paletteBtn, tr);
+            if (activeFloatingPopover) activeFloatingPopover._triggerBtn = paletteBtn;
+          }
+        }
+        return;
+      }
+
+      // If clicked inside active floating popover
+      if (activeFloatingPopover && activeFloatingPopover.contains(e.target)) {
+        return;
+      }
+      closeFloatingPalette();
+    });
+
+    // 4. Escape key clears row selection and closes popovers
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeFloatingPalette();
+        clearRowSelection();
+      }
+    });
   }
 
   // --- Initial Application Load ---
@@ -2055,6 +2716,19 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.keys(parsed).forEach(k => {
           state.tabsData[k] = parsed[k];
         });
+      }
+
+      // Recover reserved row shades for Narration table
+      const savedReservedShades = localStorage.getItem(STORAGE_KEYS.RESERVED_SHADES);
+      if (savedReservedShades) {
+        try {
+          const parsedShades = JSON.parse(savedReservedShades);
+          Object.keys(parsedShades).forEach(tId => {
+            if (state.tabsMeta[tId]) {
+              state.tabsMeta[tId].rowShade = parsedShades[tId];
+            }
+          });
+        } catch (e) {}
       }
 
       // Ensure all tabs in tabsConfig have initialized meta & data
@@ -2115,7 +2789,10 @@ document.addEventListener('DOMContentLoaded', () => {
     adjustAllTextareaHeights();
     refreshIcons();
 
-    // 7. Connect Multi-Device Synchronization (Firebase & Supabase)
+    // 7. Initialize Row Color & Selection Engine
+    initRowColorAndSelectionEngine();
+
+    // 8. Connect Multi-Device Synchronization (Firebase & Supabase)
     initSupabaseSync();
     initFirebaseSync();
   }
@@ -2356,194 +3033,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return div.innerHTML;
   };
 
-  // --- TABLE CELL RANGE SELECTION ENGINE (Excel / Sheets Multi-Column Drag) ---
-  let activeRangeSelection = null;
-  let isMouseDown = false;
-  let dragStartCoords = null;
-  let isDraggingRange = false;
-
-  function clearCellSelection() {
-    document.querySelectorAll('.ledger-table td.cell-selected').forEach(td => {
-      td.classList.remove('cell-selected');
-    });
-    activeRangeSelection = null;
-  }
-
-  function getTableSelectableRows(table) {
-    if (!table) return [];
-    return Array.from(table.querySelectorAll('tbody tr, tfoot tr:not(.add-row-tr):not(.no-copy-row)'));
-  }
-
-  function getCellCoordinates(td) {
-    if (!td || !td.hasAttribute('data-col-idx')) return null;
-    const tr = td.closest('tr');
-    if (!tr || tr.classList.contains('add-row-tr') || tr.classList.contains('no-copy-row')) return null;
-    const table = tr.closest('table');
-    if (!table) return null;
-
-    const validRows = getTableSelectableRows(table);
-    const rowIdx = validRows.indexOf(tr);
-    const colIdx = parseInt(td.getAttribute('data-col-idx'), 10);
-    if (rowIdx === -1 || isNaN(colIdx)) return null;
-
-    return {
-      table,
-      tableId: table.id,
-      validRows,
-      rowIdx,
-      colIdx,
-      td,
-      tr
-    };
-  }
-
-  function updateRangeHighlight(start, current) {
-    const minRow = Math.min(start.rowIdx, current.rowIdx);
-    const maxRow = Math.max(start.rowIdx, current.rowIdx);
-    const minCol = Math.min(start.colIdx, current.colIdx);
-    const maxCol = Math.max(start.colIdx, current.colIdx);
-
-    const table = start.table;
-    const allSelectableTds = table.querySelectorAll('tbody td[data-col-idx], tfoot tr:not(.add-row-tr):not(.no-copy-row) td[data-col-idx]');
-    const selectedCells = [];
-
-    allSelectableTds.forEach(cell => {
-      const coords = getCellCoordinates(cell);
-      if (coords &&
-          coords.rowIdx >= minRow && coords.rowIdx <= maxRow &&
-          coords.colIdx >= minCol && coords.colIdx <= maxCol) {
-        cell.classList.add('cell-selected');
-        selectedCells.push(cell);
-      } else {
-        cell.classList.remove('cell-selected');
-      }
-    });
-
-    activeRangeSelection = {
-      tableId: start.tableId,
-      minRow,
-      maxRow,
-      minCol,
-      maxCol,
-      cells: selectedCells
-    };
-  }
-
-  // Mouse drag range listeners
-  document.addEventListener('mousedown', (e) => {
-    const td = e.target.closest('td[data-col-idx]');
-    if (!td) {
-      clearCellSelection();
-      return;
-    }
-
-    const coords = getCellCoordinates(td);
-    if (!coords) return;
-
-    isMouseDown = true;
-    dragStartCoords = coords;
-    isDraggingRange = false;
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (!isMouseDown || !dragStartCoords) return;
-
-    const td = e.target.closest('td[data-col-idx]');
-    if (!td) return;
-
-    const coords = getCellCoordinates(td);
-    if (!coords || coords.tableId !== dragStartCoords.tableId) return;
-
-    if (coords.rowIdx !== dragStartCoords.rowIdx || coords.colIdx !== dragStartCoords.colIdx) {
-      isDraggingRange = true;
-      updateRangeHighlight(dragStartCoords, coords);
+  // --- DISABLE DRAG AND DROP OR LEFT-CLICK DRAG TO COPY AND PASTE FIGURES BETWEEN CELLS ---
+  document.addEventListener('dragstart', (e) => {
+    // Only permit HTML5 dragstart on Group B row rearrangement handles
+    if (!e.target.closest('.row-drag-handle')) {
+      e.preventDefault();
     }
   });
 
-  document.addEventListener('mouseup', () => {
-    if (isDraggingRange && activeRangeSelection && activeRangeSelection.cells.length > 1) {
-      if (document.activeElement && typeof document.activeElement.blur === 'function') {
-        document.activeElement.blur();
-      }
-    }
-    isMouseDown = false;
-    dragStartCoords = null;
-    isDraggingRange = false;
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      clearCellSelection();
+  document.addEventListener('drop', (e) => {
+    // Prevent dropping dragged figures or text into table cells
+    if (e.target.closest('.cell-input, .cell-textarea, .reserved-input, .summary-table-input, .subtab-input')) {
+      e.preventDefault();
     }
   });
 
-  // Multi-cell selection & Range Copy Handler (Excel / Sheets formatting)
+  // Table Copy Handler (for native row/text selection copy)
   document.addEventListener('copy', (e) => {
-    // 1. If multi-cell range selection is active
-    if (activeRangeSelection && activeRangeSelection.cells.length > 0) {
-      const table = document.getElementById(activeRangeSelection.tableId);
-      if (table) {
-        const validRows = getTableSelectableRows(table);
-        const extractedRows = [];
-
-        for (let r = activeRangeSelection.minRow; r <= activeRangeSelection.maxRow; r++) {
-          const tr = validRows[r];
-          if (!tr || tr.classList.contains('add-row-tr') || tr.classList.contains('no-copy-row') || tr.querySelector('#addBottomRowBtn')) continue;
-
-          if (tr.classList.contains('summary-tr')) {
-            const labelCell = tr.querySelector('.summary-label-cell');
-            const valCell = tr.querySelector('.summary-value-cell');
-            const label = labelCell ? labelCell.innerText.replace(/\s+/g, ' ').trim() : '';
-            let val = '';
-            if (valCell) {
-              const input = valCell.querySelector('input');
-              val = input ? input.value : valCell.innerText.replace(/\s+/g, ' ').trim();
-            }
-            const rowData = [];
-            for (let c = activeRangeSelection.minCol; c <= activeRangeSelection.maxCol; c++) {
-              if (c === 1) rowData.push(label);
-              else if (c === 5) rowData.push(val);
-              else rowData.push('');
-            }
-            extractedRows.push(rowData);
-            continue;
-          }
-
-          const rowData = [];
-          for (let c = activeRangeSelection.minCol; c <= activeRangeSelection.maxCol; c++) {
-            const td = tr.querySelector(`td[data-col-idx="${c}"]`);
-            if (td) {
-              const input = td.querySelector('input, textarea');
-              const val = input ? input.value : td.innerText.replace(/\s+/g, ' ').trim();
-              rowData.push(val);
-            } else {
-              rowData.push('');
-            }
-          }
-          extractedRows.push(rowData);
-        }
-
-        const cleanExtracted = extractedRows.filter(r => !r.join(' ').toLowerCase().includes('add extra row'));
-
-        if (cleanExtracted.length > 0) {
-          let tsv = cleanExtracted.map(r => r.join('\t')).join('\r\n');
-          tsv = tsv.split(/\r?\n/).filter(line => !line.toLowerCase().includes('add extra row')).join('\r\n');
-
-          const htmlTable = '<table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;">' +
-            cleanExtracted.map(r => '<tr>' + r.map(c => `<td style="padding:5px 10px;border:1px solid #cbd5e1;">${escapeHtml(c)}</td>`).join('') + '</tr>').join('') +
-            '</table>';
-
-          if (e.clipboardData) {
-            e.clipboardData.setData('text/plain', tsv);
-            e.clipboardData.setData('text/html', htmlTable);
-            e.preventDefault();
-            const colCount = activeRangeSelection.maxCol - activeRangeSelection.minCol + 1;
-            showToast(`Copied ${cleanExtracted.length} row(s) [${colCount} col(s)]! Ready to paste into Excel (Ctrl+V)`);
-            return;
-          }
-        }
-      }
-    }
 
     // 2. Native text selection
     const selection = window.getSelection();
