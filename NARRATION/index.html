@@ -243,6 +243,43 @@
 
     </div>
 
+    <!-- Sticky Row Color Selection Dock (Right Side of Screen) -->
+    <aside class="sticky-color-panel" id="stickyColorPanel" data-html2canvas-ignore="true" aria-label="Row Color Selection Panel">
+      <div class="sticky-panel-header">
+        <i data-lucide="palette" class="sticky-palette-icon"></i>
+        <span class="sticky-panel-title">Color</span>
+        <span class="sticky-selection-badge hidden" id="stickySelectionBadge">0</span>
+      </div>
+
+      <div class="sticky-swatches-col">
+        <button type="button" class="sticky-swatch-btn swatch-peach" data-shade="peach" title="Warm Peach" aria-label="Warm Peach">
+          <span class="swatch-tooltip">Warm Peach</span>
+        </button>
+        <button type="button" class="sticky-swatch-btn swatch-mint" data-shade="mint" title="Mint Sage" aria-label="Mint Sage">
+          <span class="swatch-tooltip">Mint Sage</span>
+        </button>
+        <button type="button" class="sticky-swatch-btn swatch-periwinkle" data-shade="periwinkle" title="Soft Periwinkle" aria-label="Soft Periwinkle">
+          <span class="swatch-tooltip">Soft Periwinkle</span>
+        </button>
+        <button type="button" class="sticky-swatch-btn swatch-rose" data-shade="rose" title="Rose Blush" aria-label="Rose Blush">
+          <span class="swatch-tooltip">Rose Blush</span>
+        </button>
+      </div>
+
+      <div class="sticky-panel-divider"></div>
+
+      <div class="sticky-actions-col">
+        <button type="button" class="sticky-action-btn sticky-reset-btn" id="stickyResetSelectedBtn" title="Reset selected rows to default theme" aria-label="Reset Selected Rows">
+          <i data-lucide="undo-2"></i>
+          <span class="action-tooltip">Reset Selected</span>
+        </button>
+        <button type="button" class="sticky-action-btn sticky-reset-all-btn" id="stickyResetAllBtn" title="Reset all rows in sheet to default theme" aria-label="Reset All Rows to Default">
+          <i data-lucide="rotate-ccw"></i>
+          <span class="action-tooltip">Reset All Rows</span>
+        </button>
+      </div>
+    </aside>
+
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden">
       <i data-lucide="check-circle" id="toastIcon"></i>
