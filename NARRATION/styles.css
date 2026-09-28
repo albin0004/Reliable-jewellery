@@ -1469,6 +1469,26 @@ body.is-exporting-image .cell-textarea {
 .ledger-table td[data-col-idx] .cell-textarea {
   cursor: text;
 }
+
+/* Multi-Cell Drag & Range Selection Highlight (Excel / Google Sheets style) */
+.ledger-table td.cell-selected {
+  background-color: rgba(37, 99, 235, 0.14) !important;
+  box-shadow: inset 0 0 0 1.5px rgba(37, 99, 235, 0.7) !important;
+  position: relative;
+  z-index: 1;
+}
+
+.ledger-table td.cell-selected .cell-input,
+.ledger-table td.cell-selected .cell-textarea {
+  background-color: transparent !important;
+  color: #1e40af !important;
+}
+
+.ledger-table td.cell-selected.computed-cell {
+  background-color: rgba(37, 99, 235, 0.2) !important;
+  color: #1e40af !important;
+}
+
 /* Flash animation on successful copy */
 @keyframes copySuccessFlash {
   0% {
