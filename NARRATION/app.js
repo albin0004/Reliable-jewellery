@@ -894,6 +894,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tableBody.appendChild(tr);
     refreshIcons(tr);
+    return tr;
   }
 
   // Re-index all row numbers
@@ -2504,6 +2505,40 @@ document.addEventListener('DOMContentLoaded', () => {
     let dragInitialSelection = new Set();
     let lastHoveredTr = null;
 
+    function handleRowDragHover(tr) {
+      if (!isRowDragSelecting || !dragSelectTbody || !dragSelectStartTr) return;
+      if (tr === lastHoveredTr) return;
+      lastHoveredTr = tr;
+
+      const allRows = Array.from(dragSelectTbody.querySelectorAll('tr'));
+      const startIdx = allRows.indexOf(dragSelectStartTr);
+      const currentIdx = allRows.indexOf(tr);
+      if (startIdx === -1 || currentIdx === -1) return;
+
+      const minIdx = Math.min(startIdx, currentIdx);
+      const maxIdx = Math.max(startIdx, currentIdx);
+
+      if (isCtrlDrag) {
+        allRows.forEach((row, i) => {
+          if (i >= minIdx && i <= maxIdx) {
+            row.classList.toggle('row-selected', ctrlDragTargetState);
+          } else {
+            row.classList.toggle('row-selected', dragInitialSelection.has(row));
+          }
+        });
+      } else {
+        allRows.forEach((row, i) => {
+          if (i >= minIdx && i <= maxIdx) {
+            row.classList.add('row-selected');
+          } else {
+            row.classList.remove('row-selected');
+          }
+        });
+      }
+
+      updateRowSelectionBadges();
+    }
+
     // A. Mousedown listener
     document.addEventListener('mousedown', (e) => {
       // Primary mouse button only
@@ -2594,47 +2629,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // C. Mouseover: Expand or contract row range while dragging
+    // C. Mousemove & Mouseover listeners for smooth drag selection
     document.addEventListener('mouseover', (e) => {
       if (!isRowDragSelecting || !dragSelectTbody || !dragSelectStartTr) return;
-
-      // Find row under mouse within the active tbody
       const tr = e.target.closest('tr');
       if (!tr || tr.closest('tbody') !== dragSelectTbody) return;
-      if (tr === lastHoveredTr) return;
-      lastHoveredTr = tr;
-
-      const allRows = Array.from(dragSelectTbody.querySelectorAll('tr'));
-      const startIdx = allRows.indexOf(dragSelectStartTr);
-      const currentIdx = allRows.indexOf(tr);
-      if (startIdx === -1 || currentIdx === -1) return;
-
-      const minIdx = Math.min(startIdx, currentIdx);
-      const maxIdx = Math.max(startIdx, currentIdx);
-
-      if (isCtrlDrag) {
-        allRows.forEach((row, i) => {
-          if (i >= minIdx && i <= maxIdx) {
-            row.classList.toggle('row-selected', ctrlDragTargetState);
-          } else {
-            row.classList.toggle('row-selected', dragInitialSelection.has(row));
-          }
-        });
-      } else {
-        allRows.forEach((row, i) => {
-          if (i >= minIdx && i <= maxIdx) {
-            row.classList.add('row-selected');
-          } else {
-            row.classList.remove('row-selected');
-          }
-        });
-      }
-
-      updateRowSelectionBadges();
+      handleRowDragHover(tr);
     });
 
-    // D. Mouseup / Blur / Mouseleave: Complete row drag-selection
+    // D. Mouseup / Blur: Complete row drag-selection
     const endRowDragSelection = () => {
+      if (typeof stopAutoScroll === 'function') stopAutoScroll();
       if (isRowDragSelecting) {
         isRowDragSelecting = false;
         document.querySelectorAll('.ledger-table.is-drag-selecting').forEach(tbl => {
@@ -2653,7 +2658,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.addEventListener('mouseup', endRowDragSelection);
     window.addEventListener('blur', endRowDragSelection);
-    document.addEventListener('mouseleave', endRowDragSelection);
 
     // 3. Document Click for Inline Palette Button & Outside Popover Dismissal
     document.addEventListener('click', (e) => {
@@ -3050,6 +3054,95 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // --- AUTO-SCROLL ENGINE DURING DRAG SELECTION ---
+  let autoScrollRafId = null;
+  let lastDragMouseX = 0;
+  let lastDragMouseY = 0;
+
+  function startAutoScrollIfNeeded() {
+    if (autoScrollRafId) return;
+
+    const SCROLL_MARGIN = 80; // px from viewport top/bottom to start scrolling
+    const MAX_SPEED = 28;     // max scroll speed in px per frame
+
+    const autoScrollStep = () => {
+      if (!isRowDragSelecting && !isDraggingCellRange && !isCellMouseDown) {
+        stopAutoScroll();
+        return;
+      }
+
+      const vHeight = window.innerHeight;
+      let delta = 0;
+
+      if (lastDragMouseY < SCROLL_MARGIN && lastDragMouseY >= 0) {
+        const factor = (SCROLL_MARGIN - lastDragMouseY) / SCROLL_MARGIN;
+        delta = -Math.max(4, Math.round(factor * MAX_SPEED));
+      } else if (lastDragMouseY > vHeight - SCROLL_MARGIN) {
+        const factor = (lastDragMouseY - (vHeight - SCROLL_MARGIN)) / SCROLL_MARGIN;
+        delta = Math.max(4, Math.round(factor * MAX_SPEED));
+      }
+
+      if (delta !== 0) {
+        window.scrollBy(0, delta);
+
+        // Update selection with element under cursor after scrolling
+        const safeY = Math.max(10, Math.min(vHeight - 10, lastDragMouseY));
+        const safeX = Math.max(10, Math.min(window.innerWidth - 10, lastDragMouseX));
+        const el = document.elementFromPoint(safeX, safeY);
+
+        if (el) {
+          if (isRowDragSelecting && dragSelectTbody) {
+            const tr = el.closest('tr');
+            if (tr && tr.closest('tbody') === dragSelectTbody) {
+              handleRowDragHover(tr);
+            }
+          } else if (dragStartCoords && dragStartCoords.table) {
+            const td = el.closest('td[data-col-idx]');
+            if (td) {
+              const coords = getCellCoordinates(td);
+              if (coords && coords.tableId === dragStartCoords.tableId) {
+                isDraggingCellRange = true;
+                updateRangeHighlight(dragStartCoords, coords);
+              }
+            }
+          }
+        }
+      }
+
+      autoScrollRafId = requestAnimationFrame(autoScrollStep);
+    };
+
+    autoScrollRafId = requestAnimationFrame(autoScrollStep);
+  }
+
+  function stopAutoScroll() {
+    if (autoScrollRafId) {
+      cancelAnimationFrame(autoScrollRafId);
+      autoScrollRafId = null;
+    }
+  }
+
+  // Track mouse coordinates globally during drag
+  document.addEventListener('mousemove', (e) => {
+    lastDragMouseX = e.clientX;
+    lastDragMouseY = e.clientY;
+
+    if (isRowDragSelecting || isDraggingCellRange || isCellMouseDown) {
+      startAutoScrollIfNeeded();
+    }
+  });
+
+  // Helper to fetch all valid selectable and copyable data rows from a table
+  function getTableDataRows(table) {
+    if (!table) return [];
+    return Array.from(table.querySelectorAll('tbody tr, tfoot tr.summary-tr')).filter(r => {
+      return !r.classList.contains('add-row-tr') &&
+             !r.classList.contains('no-copy-row') &&
+             !r.hasAttribute('data-copy-ignore') &&
+             !r.querySelector('#addBottomRowBtn');
+    });
+  }
+
   // --- TABLE CELL RANGE SELECTION ENGINE (Excel / Sheets Multi-Column & Multi-Row Drag) ---
   let activeRangeSelection = null;
   let isCellMouseDown = false;
@@ -3070,12 +3163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const table = tr.closest('.ledger-table');
     if (!table) return null;
 
-    const allRows = Array.from(table.querySelectorAll('tbody tr, tfoot tr.summary-tr')).filter(r => {
-      return !r.classList.contains('add-row-tr') &&
-             !r.classList.contains('no-copy-row') &&
-             !r.hasAttribute('data-copy-ignore') &&
-             !r.querySelector('#addBottomRowBtn');
-    });
+    const allRows = getTableDataRows(table);
     const rowIdx = allRows.indexOf(tr);
     const colIdx = parseInt(td.getAttribute('data-col-idx'), 10);
     if (rowIdx === -1 || isNaN(colIdx)) return null;
@@ -3099,20 +3187,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const maxCol = Math.max(start.colIdx, current.colIdx);
 
     const table = start.table;
-    const allSelectableTds = table.querySelectorAll('tbody td[data-col-idx], tfoot tr.summary-tr td[data-col-idx]');
+    const allRows = getTableDataRows(table);
     const selectedCells = [];
 
-    allSelectableTds.forEach(cell => {
-      const coords = getCellCoordinates(cell);
-      if (coords &&
-          coords.rowIdx >= minRow && coords.rowIdx <= maxRow &&
-          coords.colIdx >= minCol && coords.colIdx <= maxCol) {
-        cell.classList.add('cell-selected');
-        selectedCells.push(cell);
-      } else {
-        cell.classList.remove('cell-selected');
+    // Clear previous cell selections in active table
+    table.querySelectorAll('.cell-selected').forEach(cell => cell.classList.remove('cell-selected'));
+
+    for (let r = minRow; r <= maxRow; r++) {
+      const tr = allRows[r];
+      if (!tr) continue;
+
+      for (let c = minCol; c <= maxCol; c++) {
+        const cell = tr.querySelector(`td[data-col-idx="${c}"]`);
+        if (cell) {
+          cell.classList.add('cell-selected');
+          selectedCells.push(cell);
+        }
       }
-    });
+    }
 
     activeRangeSelection = {
       tableId: start.tableId,
@@ -3122,7 +3214,7 @@ document.addEventListener('DOMContentLoaded', () => {
       minCol,
       maxCol,
       cells: selectedCells,
-      allRows: start.allRows
+      allRows
     };
   }
 
@@ -3165,6 +3257,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('mouseup', () => {
+    stopAutoScroll();
     if (isDraggingCellRange && activeRangeSelection && activeRangeSelection.cells.length > 1) {
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
@@ -3201,12 +3294,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('copy', (e) => {
     // 1. Check if Multi-Cell Range Drag Selection is active
     if (activeRangeSelection && activeRangeSelection.cells.length > 0) {
-      const allRows = activeRangeSelection.allRows || Array.from(activeRangeSelection.table.querySelectorAll('tbody tr, tfoot tr.summary-tr')).filter(r => {
-        return !r.classList.contains('add-row-tr') &&
-               !r.classList.contains('no-copy-row') &&
-               !r.hasAttribute('data-copy-ignore') &&
-               !r.querySelector('#addBottomRowBtn');
-      });
+      const allRows = activeRangeSelection.allRows || getTableDataRows(activeRangeSelection.table);
       const extractedRows = [];
 
       for (let r = activeRangeSelection.minRow; r <= activeRangeSelection.maxRow; r++) {
@@ -3248,7 +3336,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const cleanRows = extractedRows.filter(r => r && r.length > 0 && !r.join(' ').toLowerCase().includes('add extra row'));
       if (cleanRows.length > 0) {
         const colCount = activeRangeSelection.maxCol - activeRangeSelection.minCol + 1;
-        if (writeGridToClipboard(e, cleanRows, `Copied ${cleanRows.length} row(s) [${colCount} col(s)]! Ready to paste into Excel (Ctrl+V)`)) {
+        if (writeGridToClipboard(e, cleanRows, `Copied all ${cleanRows.length} selected row(s) [${colCount} col(s)]! Ready to paste into Excel (Ctrl+V)`)) {
           return;
         }
       }
@@ -3290,7 +3378,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const cleanRows = extractedRows.filter(r => r && r.length > 0 && !r.join(' ').toLowerCase().includes('add extra row'));
       if (cleanRows.length > 0) {
-        if (writeGridToClipboard(e, cleanRows, `Selected ${cleanRows.length} row(s) copied for Excel!`)) {
+        if (writeGridToClipboard(e, cleanRows, `Copied all ${cleanRows.length} selected row(s) for Excel!`)) {
           return;
         }
       }
@@ -3330,13 +3418,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const tableRows = Array.from(targetTable.querySelectorAll('tr')).filter(tr => {
-      return !tr.classList.contains('add-row-tr') &&
-             !tr.classList.contains('no-copy-row') &&
-             !tr.hasAttribute('data-copy-ignore') &&
-             !tr.querySelector('#addBottomRowBtn');
-    });
-
+    const tableRows = getTableDataRows(targetTable);
     const selectedRows = tableRows.filter(tr => {
       try {
         return selection.containsNode(tr, true);
@@ -3374,7 +3456,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const cleanRows = extractedData.filter(r => r && r.length > 0 && !r.join(' ').toLowerCase().includes('add extra row'));
     if (cleanRows.length > 0) {
-      writeGridToClipboard(e, cleanRows, `Selected ${cleanRows.length} table row(s) copied for Excel!`);
+      writeGridToClipboard(e, cleanRows, `Copied all ${cleanRows.length} selected table row(s) for Excel!`);
     }
   });
 
@@ -3401,12 +3483,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     e.preventDefault();
 
-    const rawLines = text.split(/\r\n|\r|\n/);
-    const lines = rawLines.map(l => l.trim());
-    while (lines.length > 0 && lines[lines.length - 1] === '') {
-      lines.pop();
+    // Clean lines without stripping leading column tabs
+    const rawLines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    while (rawLines.length > 0 && rawLines[rawLines.length - 1].trim() === '') {
+      rawLines.pop();
     }
-    if (lines.length === 0) return;
+    if (rawLines.length === 0) return;
 
     const isSubTabView = currentView.startsWith('tab') || table.id === 'subTabTable';
 
@@ -3430,24 +3512,28 @@ document.addEventListener('DOMContentLoaded', () => {
         state.tabsData[tabId] = [];
       }
 
-      lines.forEach((line, i) => {
+      rawLines.forEach((line, i) => {
         const rowIdx = startRowIdx + i;
         while (rowIdx >= state.tabsData[tabId].length) {
           state.tabsData[tabId].push({ col1: '', col2: '', col3: '', col4: '' });
         }
 
         if (line.includes('\t')) {
-          const parts = line.split('\t').map(p => p.trim());
+          const parts = line.split('\t');
           parts.forEach((part, pIdx) => {
             const colKey = colKeys[startColIdx + pIdx];
             if (colKey) {
-              state.tabsData[tabId][rowIdx][colKey] = part;
+              const isNumCol = (colKey !== 'col1');
+              const val = isNumCol ? part.replace(/,/g, '').trim() : part.trim();
+              state.tabsData[tabId][rowIdx][colKey] = val;
             }
           });
         } else {
           const colKey = colKeys[startColIdx];
           if (colKey) {
-            state.tabsData[tabId][rowIdx][colKey] = line;
+            const isNumCol = (colKey !== 'col1');
+            const val = isNumCol ? line.replace(/,/g, '').trim() : line.trim();
+            state.tabsData[tabId][rowIdx][colKey] = val;
           }
         }
       });
@@ -3457,7 +3543,7 @@ document.addEventListener('DOMContentLoaded', () => {
       calculateReconciliation(true);
       flushPendingSync();
       adjustAllTextareaHeights();
-      showToast(`Pasted ${lines.length} row(s) across columns.`);
+      showToast(`Pasted ${rawLines.length} row(s) accurately across columns.`);
 
     } else {
       // NARRATION TABLE MULTI-LINE & HORIZONTAL SPREAD PASTE
@@ -3475,11 +3561,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       let anyTabRenamed = false;
 
-      lines.forEach((line, i) => {
+      rawLines.forEach((line, i) => {
         const rowIdx = startRowIdx + i;
         while (rowIdx >= allTrs.length) {
-          createManualRowElement({ narration: '', c1: '', c2: '', c3: '' });
-          allTrs = Array.from(tableBody.querySelectorAll('tr'));
+          const newTr = createManualRowElement({ narration: '', c1: '', c2: '', c3: '' });
+          allTrs.push(newTr || tableBody.lastElementChild);
         }
 
         const tr = allTrs[rowIdx];
@@ -3492,39 +3578,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const colInputs = [narrInput, c1Input, c2Input, c3Input];
 
         if (line.includes('\t')) {
-          const parts = line.split('\t').map(p => p.trim());
+          const parts = line.split('\t');
           parts.forEach((part, pIdx) => {
             const inp = colInputs[startColIdx + pIdx];
             if (!inp) return;
             if (inp.classList.contains('col-narration')) {
-              inp.value = part;
+              const val = part.trim();
+              inp.value = val;
               const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
               if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
                 const tabId = tabsConfig[reservedIdx - 1].id;
                 if (state.tabsMeta[tabId]) {
-                  state.tabsMeta[tabId].name = part;
+                  state.tabsMeta[tabId].name = val;
                   anyTabRenamed = true;
                 }
               }
             } else if (!inp.readOnly) {
-              inp.value = part;
+              inp.value = part.replace(/,/g, '').trim();
             }
           });
         } else {
           const inp = colInputs[startColIdx];
           if (inp) {
             if (inp.classList.contains('col-narration')) {
-              inp.value = line;
+              const val = line.trim();
+              inp.value = val;
               const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
               if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
                 const tabId = tabsConfig[reservedIdx - 1].id;
                 if (state.tabsMeta[tabId]) {
-                  state.tabsMeta[tabId].name = line;
+                  state.tabsMeta[tabId].name = val;
                   anyTabRenamed = true;
                 }
               }
             } else if (!inp.readOnly) {
-              inp.value = line;
+              inp.value = line.replace(/,/g, '').trim();
             }
           }
         }
@@ -3539,7 +3627,7 @@ document.addEventListener('DOMContentLoaded', () => {
       saveStateAndSync();
       flushPendingSync();
       adjustAllTextareaHeights();
-      showToast(`Pasted ${lines.length} row(s) across columns.`);
+      showToast(`Pasted ${rawLines.length} row(s) accurately across columns.`);
     }
   });
 
