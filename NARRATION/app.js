@@ -1416,6 +1416,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function switchView(viewId) {
     currentView = viewId;
     if (typeof clearRowSelection === 'function') clearRowSelection();
+    if (typeof clearCellSelection === 'function') clearCellSelection();
 
     if (viewId === 'narration') {
       narrationView.classList.remove('hidden');
@@ -2679,11 +2680,12 @@ document.addEventListener('DOMContentLoaded', () => {
       closeFloatingPalette();
     });
 
-    // 4. Escape key clears row selection and closes popovers
+    // 4. Escape key clears row selection, cell selection, and closes popovers
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         closeFloatingPalette();
         clearRowSelection();
+        clearCellSelection();
       }
     });
   }
@@ -3048,16 +3050,260 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Table Copy Handler (for native row/text selection copy)
-  document.addEventListener('copy', (e) => {
+  // --- TABLE CELL RANGE SELECTION ENGINE (Excel / Sheets Multi-Column & Multi-Row Drag) ---
+  let activeRangeSelection = null;
+  let isCellMouseDown = false;
+  let dragStartCoords = null;
+  let isDraggingCellRange = false;
 
-    // 2. Native text selection
+  function clearCellSelection() {
+    document.querySelectorAll('.ledger-table td.cell-selected').forEach(td => {
+      td.classList.remove('cell-selected');
+    });
+    activeRangeSelection = null;
+  }
+
+  function getCellCoordinates(td) {
+    if (!td || !td.hasAttribute('data-col-idx')) return null;
+    const tr = td.closest('tr');
+    if (!tr) return null;
+    const table = tr.closest('.ledger-table');
+    if (!table) return null;
+
+    const allRows = Array.from(table.querySelectorAll('tbody tr, tfoot tr.summary-tr')).filter(r => {
+      return !r.classList.contains('add-row-tr') &&
+             !r.classList.contains('no-copy-row') &&
+             !r.hasAttribute('data-copy-ignore') &&
+             !r.querySelector('#addBottomRowBtn');
+    });
+    const rowIdx = allRows.indexOf(tr);
+    const colIdx = parseInt(td.getAttribute('data-col-idx'), 10);
+    if (rowIdx === -1 || isNaN(colIdx)) return null;
+
+    return {
+      table,
+      tableId: table.id,
+      rowIdx,
+      colIdx,
+      td,
+      tr,
+      allRows
+    };
+  }
+
+  function updateRangeHighlight(start, current) {
+    if (!start || !current || !start.table) return;
+    const minRow = Math.min(start.rowIdx, current.rowIdx);
+    const maxRow = Math.max(start.rowIdx, current.rowIdx);
+    const minCol = Math.min(start.colIdx, current.colIdx);
+    const maxCol = Math.max(start.colIdx, current.colIdx);
+
+    const table = start.table;
+    const allSelectableTds = table.querySelectorAll('tbody td[data-col-idx], tfoot tr.summary-tr td[data-col-idx]');
+    const selectedCells = [];
+
+    allSelectableTds.forEach(cell => {
+      const coords = getCellCoordinates(cell);
+      if (coords &&
+          coords.rowIdx >= minRow && coords.rowIdx <= maxRow &&
+          coords.colIdx >= minCol && coords.colIdx <= maxCol) {
+        cell.classList.add('cell-selected');
+        selectedCells.push(cell);
+      } else {
+        cell.classList.remove('cell-selected');
+      }
+    });
+
+    activeRangeSelection = {
+      tableId: start.tableId,
+      table: start.table,
+      minRow,
+      maxRow,
+      minCol,
+      maxCol,
+      cells: selectedCells,
+      allRows: start.allRows
+    };
+  }
+
+  // Cell Range Mouse Listeners
+  document.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+
+    const td = e.target.closest('td[data-col-idx]');
+    if (!td) {
+      if (!e.target.closest('#stickyColorPanel, .row-palette-popover, .row-palette-btn, .row-num-cell')) {
+        clearCellSelection();
+      }
+      return;
+    }
+
+    const coords = getCellCoordinates(td);
+    if (!coords) return;
+
+    isCellMouseDown = true;
+    dragStartCoords = coords;
+    isDraggingCellRange = false;
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isCellMouseDown || !dragStartCoords) return;
+
+    const td = e.target.closest('td[data-col-idx]');
+    if (!td) return;
+
+    const coords = getCellCoordinates(td);
+    if (!coords || coords.tableId !== dragStartCoords.tableId) return;
+
+    if (coords.rowIdx !== dragStartCoords.rowIdx || coords.colIdx !== dragStartCoords.colIdx) {
+      isDraggingCellRange = true;
+      try {
+        window.getSelection()?.removeAllRanges();
+      } catch (err) {}
+      updateRangeHighlight(dragStartCoords, coords);
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDraggingCellRange && activeRangeSelection && activeRangeSelection.cells.length > 1) {
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+    } else if (isCellMouseDown && !isDraggingCellRange) {
+      clearCellSelection();
+    }
+    isCellMouseDown = false;
+    dragStartCoords = null;
+    isDraggingCellRange = false;
+  });
+
+  // Helper to build TSV and HTML table from 2D array of strings and write to clipboard
+  function writeGridToClipboard(e, cleanRows, successToastMsg) {
+    if (!cleanRows || cleanRows.length === 0) return false;
+    const tsv = cleanRows.map(r => r.join('\t')).join('\r\n');
+    const htmlTable = '<table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;">' +
+      cleanRows.map(r => '<tr>' + r.map(c => `<td style="padding:5px 10px;border:1px solid #cbd5e1;">${escapeHtml(c)}</td>`).join('') + '</tr>').join('') +
+      '</table>';
+
+    if (e.clipboardData) {
+      e.clipboardData.setData('text/plain', tsv);
+      e.clipboardData.setData('text/html', htmlTable);
+      e.preventDefault();
+      if (successToastMsg) {
+        showToast(successToastMsg);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  // --- TABLE COPY HANDLER (Range Drag, Row Selection & Multi-Cell Table Copy for Excel / Google Sheets) ---
+  document.addEventListener('copy', (e) => {
+    // 1. Check if Multi-Cell Range Drag Selection is active
+    if (activeRangeSelection && activeRangeSelection.cells.length > 0) {
+      const allRows = activeRangeSelection.allRows || Array.from(activeRangeSelection.table.querySelectorAll('tbody tr, tfoot tr.summary-tr')).filter(r => {
+        return !r.classList.contains('add-row-tr') &&
+               !r.classList.contains('no-copy-row') &&
+               !r.hasAttribute('data-copy-ignore') &&
+               !r.querySelector('#addBottomRowBtn');
+      });
+      const extractedRows = [];
+
+      for (let r = activeRangeSelection.minRow; r <= activeRangeSelection.maxRow; r++) {
+        const tr = allRows[r];
+        if (!tr) continue;
+
+        if (tr.classList.contains('summary-tr')) {
+          const labelCell = tr.querySelector('.summary-label-cell');
+          const valCell = tr.querySelector('.summary-value-cell');
+          const label = labelCell ? labelCell.innerText.replace(/\s+/g, ' ').trim() : '';
+          let val = '';
+          if (valCell) {
+            const input = valCell.querySelector('input');
+            val = input ? input.value : valCell.innerText.replace(/\s+/g, ' ').trim();
+          }
+          const summaryRow = [];
+          for (let c = activeRangeSelection.minCol; c <= activeRangeSelection.maxCol; c++) {
+            if (c === 1) summaryRow.push(label);
+            else if (c === 5) summaryRow.push(val);
+            else summaryRow.push('');
+          }
+          extractedRows.push(summaryRow);
+        } else {
+          const rowData = [];
+          for (let c = activeRangeSelection.minCol; c <= activeRangeSelection.maxCol; c++) {
+            const td = tr.querySelector(`td[data-col-idx="${c}"]`);
+            if (td) {
+              const input = td.querySelector('input, textarea');
+              const val = input ? input.value : td.innerText.replace(/\s+/g, ' ').trim();
+              rowData.push(val);
+            } else {
+              rowData.push('');
+            }
+          }
+          extractedRows.push(rowData);
+        }
+      }
+
+      const cleanRows = extractedRows.filter(r => r && r.length > 0 && !r.join(' ').toLowerCase().includes('add extra row'));
+      if (cleanRows.length > 0) {
+        const colCount = activeRangeSelection.maxCol - activeRangeSelection.minCol + 1;
+        if (writeGridToClipboard(e, cleanRows, `Copied ${cleanRows.length} row(s) [${colCount} col(s)]! Ready to paste into Excel (Ctrl+V)`)) {
+          return;
+        }
+      }
+    }
+
+    // 2. Check if Row Selection (.row-selected) is active
+    const selectedTrs = Array.from(document.querySelectorAll('.ledger-table tr.row-selected')).filter(tr => {
+      return !tr.classList.contains('add-row-tr') &&
+             !tr.classList.contains('no-copy-row') &&
+             !tr.hasAttribute('data-copy-ignore') &&
+             !tr.querySelector('#addBottomRowBtn');
+    });
+
+    if (selectedTrs.length > 0) {
+      const extractedRows = selectedTrs.map(tr => {
+        if (tr.classList.contains('summary-tr')) {
+          const labelCell = tr.querySelector('.summary-label-cell');
+          const valCell = tr.querySelector('.summary-value-cell');
+          const label = labelCell ? labelCell.innerText.replace(/\s+/g, ' ').trim() : '';
+          let val = '';
+          if (valCell) {
+            const input = valCell.querySelector('input');
+            val = input ? input.value : valCell.innerText.replace(/\s+/g, ' ').trim();
+          }
+          return [label, '', '', '', val];
+        }
+
+        const dataCells = Array.from(tr.querySelectorAll('td[data-col-idx]'));
+        if (dataCells.length > 0) {
+          return dataCells.map(cell => {
+            const input = cell.querySelector('input, textarea');
+            if (input) return input.value;
+            return cell.innerText.replace(/\s+/g, ' ').trim();
+          });
+        }
+        const genericCells = Array.from(tr.querySelectorAll('th:not(.col-num-th):not(.no-capture-cell), td:not(.row-num-cell):not(.no-capture-cell)'));
+        return genericCells.map(c => c.innerText.replace(/\s+/g, ' ').trim());
+      });
+
+      const cleanRows = extractedRows.filter(r => r && r.length > 0 && !r.join(' ').toLowerCase().includes('add extra row'));
+      if (cleanRows.length > 0) {
+        if (writeGridToClipboard(e, cleanRows, `Selected ${cleanRows.length} row(s) copied for Excel!`)) {
+          return;
+        }
+      }
+    }
+
+    // 3. Native text selection across table cells / rows
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
 
     const activeEl = document.activeElement;
     if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
       if (activeEl.selectionStart !== activeEl.selectionEnd) {
+        // Normal single-cell text selection within active input
         return;
       }
     }
@@ -3085,13 +3331,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const tableRows = Array.from(targetTable.querySelectorAll('tr')).filter(tr => {
-      if (tr.classList.contains('add-row-tr') ||
-          tr.classList.contains('no-copy-row') ||
-          tr.hasAttribute('data-copy-ignore') ||
-          tr.querySelector('#addBottomRowBtn')) {
-        return false;
-      }
-      return true;
+      return !tr.classList.contains('add-row-tr') &&
+             !tr.classList.contains('no-copy-row') &&
+             !tr.hasAttribute('data-copy-ignore') &&
+             !tr.querySelector('#addBottomRowBtn');
     });
 
     const selectedRows = tableRows.filter(tr => {
@@ -3129,30 +3372,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return genericCells.map(c => c.innerText.replace(/\s+/g, ' ').trim());
     });
 
-    const cleanRows = extractedData.filter(r => {
-      if (!r || r.length === 0) return false;
-      if (r.join(' ').toLowerCase().includes('add extra row')) return false;
-      return true;
-    });
-
+    const cleanRows = extractedData.filter(r => r && r.length > 0 && !r.join(' ').toLowerCase().includes('add extra row'));
     if (cleanRows.length > 0) {
-      let tsv = cleanRows.map(r => r.join('\t')).join('\r\n');
-      tsv = tsv.split(/\r?\n/).filter(line => !line.toLowerCase().includes('add extra row')).join('\r\n');
-
-      const htmlTable = '<table border="1" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt;">' +
-        cleanRows.map(r => '<tr>' + r.map(c => `<td style="padding:5px 10px;border:1px solid #cbd5e1;">${escapeHtml(c)}</td>`).join('') + '</tr>').join('') +
-        '</table>';
-
-      if (e.clipboardData) {
-        e.clipboardData.setData('text/plain', tsv);
-        e.clipboardData.setData('text/html', htmlTable);
-        e.preventDefault();
-        showToast('Selected table rows copied for Excel!');
-      }
+      writeGridToClipboard(e, cleanRows, `Selected ${cleanRows.length} table row(s) copied for Excel!`);
     }
   });
 
-  // --- MULTI-LINE SPLIT-PASTE ENGINE (WhatsApp / Excel / Multi-Row Paste) ---
+  // --- SPECIAL PASTE & MULTI-LINE / MULTI-COLUMN ENGINE (Excel / WhatsApp / TSV / Multi-Row Paste) ---
   document.addEventListener('paste', (e) => {
     const target = e.target;
     if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) return;
@@ -3163,56 +3389,66 @@ document.addEventListener('DOMContentLoaded', () => {
     const clipboardData = e.clipboardData || window.clipboardData;
     if (!clipboardData) return;
     const text = clipboardData.getData('text');
-    if (!text || (!text.includes('\n') && !text.includes('\r'))) {
-      return; // Single-line paste: normal browser paste
+    if (!text) return;
+
+    const hasNewlines = text.includes('\n') || text.includes('\r');
+    const hasTabs = text.includes('\t');
+
+    // If it has NEITHER newlines NOR tabs, proceed normally with standard single-cell paste
+    if (!hasNewlines && !hasTabs) {
+      return;
     }
+
+    e.preventDefault();
 
     const rawLines = text.split(/\r\n|\r|\n/);
     const lines = rawLines.map(l => l.trim());
     while (lines.length > 0 && lines[lines.length - 1] === '') {
       lines.pop();
     }
-    if (lines.length <= 1) {
-      return;
-    }
-
-    e.preventDefault();
+    if (lines.length === 0) return;
 
     const isSubTabView = currentView.startsWith('tab') || table.id === 'subTabTable';
 
     if (isSubTabView) {
-      // SUB-TAB MULTI-LINE SPLIT-PASTE
+      // SUB-TAB MULTI-LINE & HORIZONTAL SPREAD PASTE
       const tabId = currentView.startsWith('tab') ? currentView : (tabsConfig[0]?.id || 'tab1');
       const targetTr = target.closest('tr');
       if (!targetTr || !subTabTableBody) return;
 
       const allTrs = Array.from(subTabTableBody.querySelectorAll('tr'));
-      const startIdx = allTrs.indexOf(targetTr);
-      if (startIdx === -1) return;
+      const startRowIdx = allTrs.indexOf(targetTr);
+      if (startRowIdx === -1) return;
 
-      let targetKey = 'col1';
-      if (target.classList.contains('subtab-col-2')) targetKey = 'col2';
-      else if (target.classList.contains('subtab-col-3')) targetKey = 'col3';
-      else if (target.classList.contains('subtab-col-4')) targetKey = 'col4';
+      const colKeys = ['col1', 'col2', 'col3', 'col4'];
+      let startColIdx = 0;
+      if (target.classList.contains('subtab-col-2')) startColIdx = 1;
+      else if (target.classList.contains('subtab-col-3')) startColIdx = 2;
+      else if (target.classList.contains('subtab-col-4')) startColIdx = 3;
 
       if (!state.tabsData[tabId]) {
         state.tabsData[tabId] = [];
       }
 
       lines.forEach((line, i) => {
-        const rowIdx = startIdx + i;
+        const rowIdx = startRowIdx + i;
         while (rowIdx >= state.tabsData[tabId].length) {
           state.tabsData[tabId].push({ col1: '', col2: '', col3: '', col4: '' });
         }
 
-        if (line.includes('\t') && targetKey === 'col1') {
+        if (line.includes('\t')) {
           const parts = line.split('\t').map(p => p.trim());
-          if (parts[0] !== undefined) state.tabsData[tabId][rowIdx].col1 = parts[0];
-          if (parts[1] !== undefined) state.tabsData[tabId][rowIdx].col2 = parts[1];
-          if (parts[2] !== undefined) state.tabsData[tabId][rowIdx].col3 = parts[2];
-          if (parts[3] !== undefined) state.tabsData[tabId][rowIdx].col4 = parts[3];
+          parts.forEach((part, pIdx) => {
+            const colKey = colKeys[startColIdx + pIdx];
+            if (colKey) {
+              state.tabsData[tabId][rowIdx][colKey] = part;
+            }
+          });
         } else {
-          state.tabsData[tabId][rowIdx][targetKey] = line;
+          const colKey = colKeys[startColIdx];
+          if (colKey) {
+            state.tabsData[tabId][rowIdx][colKey] = line;
+          }
         }
       });
 
@@ -3221,26 +3457,26 @@ document.addEventListener('DOMContentLoaded', () => {
       calculateReconciliation(true);
       flushPendingSync();
       adjustAllTextareaHeights();
-      showToast(`Pasted ${lines.length} items across rows.`);
+      showToast(`Pasted ${lines.length} row(s) across columns.`);
 
     } else {
-      // NARRATION TABLE MULTI-LINE SPLIT-PASTE
+      // NARRATION TABLE MULTI-LINE & HORIZONTAL SPREAD PASTE
       const targetTr = target.closest('tr');
       if (!targetTr || !tableBody) return;
 
       let allTrs = Array.from(tableBody.querySelectorAll('tr'));
-      const startIdx = allTrs.indexOf(targetTr);
-      if (startIdx === -1) return;
+      const startRowIdx = allTrs.indexOf(targetTr);
+      if (startRowIdx === -1) return;
 
-      let colType = 'narration';
-      if (target.classList.contains('col-1')) colType = 'col-1';
-      else if (target.classList.contains('col-2')) colType = 'col-2';
-      else if (target.classList.contains('col-3')) colType = 'col-3';
+      let startColIdx = 0;
+      if (target.classList.contains('col-1')) startColIdx = 1;
+      else if (target.classList.contains('col-2')) startColIdx = 2;
+      else if (target.classList.contains('col-3')) startColIdx = 3;
 
       let anyTabRenamed = false;
 
       lines.forEach((line, i) => {
-        const rowIdx = startIdx + i;
+        const rowIdx = startRowIdx + i;
         while (rowIdx >= allTrs.length) {
           createManualRowElement({ narration: '', c1: '', c2: '', c3: '' });
           allTrs = Array.from(tableBody.querySelectorAll('tr'));
@@ -3249,39 +3485,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const tr = allTrs[rowIdx];
         if (!tr) return;
 
-        if (line.includes('\t') && colType === 'narration') {
+        const narrInput = tr.querySelector('.col-narration');
+        const c1Input = tr.querySelector('.col-1');
+        const c2Input = tr.querySelector('.col-2');
+        const c3Input = tr.querySelector('.col-3');
+        const colInputs = [narrInput, c1Input, c2Input, c3Input];
+
+        if (line.includes('\t')) {
           const parts = line.split('\t').map(p => p.trim());
-          if (parts[0] !== undefined) {
-            const narrInput = tr.querySelector('.col-narration');
-            if (narrInput) {
-              narrInput.value = parts[0];
+          parts.forEach((part, pIdx) => {
+            const inp = colInputs[startColIdx + pIdx];
+            if (!inp) return;
+            if (inp.classList.contains('col-narration')) {
+              inp.value = part;
               const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
               if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
                 const tabId = tabsConfig[reservedIdx - 1].id;
                 if (state.tabsMeta[tabId]) {
-                  state.tabsMeta[tabId].name = parts[0];
+                  state.tabsMeta[tabId].name = part;
                   anyTabRenamed = true;
                 }
               }
+            } else if (!inp.readOnly) {
+              inp.value = part;
             }
-          }
-          if (parts[1] !== undefined) {
-            const c1 = tr.querySelector('.col-1');
-            if (c1 && !c1.readOnly) c1.value = parts[1];
-          }
-          if (parts[2] !== undefined) {
-            const c2 = tr.querySelector('.col-2');
-            if (c2 && !c2.readOnly) c2.value = parts[2];
-          }
-          if (parts[3] !== undefined) {
-            const c3 = tr.querySelector('.col-3');
-            if (c3 && !c3.readOnly) c3.value = parts[3];
-          }
+          });
         } else {
-          if (colType === 'narration') {
-            const narrInput = tr.querySelector('.col-narration');
-            if (narrInput) {
-              narrInput.value = line;
+          const inp = colInputs[startColIdx];
+          if (inp) {
+            if (inp.classList.contains('col-narration')) {
+              inp.value = line;
               const reservedIdx = parseInt(tr.getAttribute('data-reserved-row'), 10);
               if (!isNaN(reservedIdx) && tabsConfig[reservedIdx - 1]) {
                 const tabId = tabsConfig[reservedIdx - 1].id;
@@ -3290,11 +3523,8 @@ document.addEventListener('DOMContentLoaded', () => {
                   anyTabRenamed = true;
                 }
               }
-            }
-          } else {
-            const input = tr.querySelector('.' + colType);
-            if (input && !input.readOnly) {
-              input.value = line;
+            } else if (!inp.readOnly) {
+              inp.value = line;
             }
           }
         }
@@ -3309,7 +3539,7 @@ document.addEventListener('DOMContentLoaded', () => {
       saveStateAndSync();
       flushPendingSync();
       adjustAllTextareaHeights();
-      showToast(`Pasted ${lines.length} items across rows.`);
+      showToast(`Pasted ${lines.length} row(s) across columns.`);
     }
   });
 
