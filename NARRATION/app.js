@@ -1,11 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-  // --- Strict Exact Precision Helpers (Group A: Tabs 1 to 5 + Dynamic Group A) ---
+  // --- Strict Exact Decimal Precision Helpers (Across All Tabs & Narration) ---
   function cleanFloat(num) {
     if (num === '' || num === null || num === undefined || isNaN(num)) return 0;
     const n = parseFloat(num);
     if (isNaN(n)) return 0;
-    return parseFloat(n.toPrecision(14));
+    // toPrecision(12) cleanly strips IEEE-754 binary floating point noise while keeping exact decimal precision
+    const cleaned = parseFloat(n.toPrecision(12));
+    return Math.abs(cleaned) === 0 ? 0 : cleaned;
   }
 
   function formatExact(num) {
@@ -14,27 +16,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return String(cleaned);
   }
 
-  // --- Strict 2-Decimal Precision Helpers (Groups B & C) ---
   function roundTwo(num) {
-    if (num === '' || num === null || num === undefined || isNaN(num)) return 0;
-    return Math.round((parseFloat(num) + Number.EPSILON) * 100) / 100;
+    return cleanFloat(num);
   }
 
   function formatTwoDecimals(num) {
-    if (num === '' || num === null || num === undefined || isNaN(num)) return '';
-    const rounded = roundTwo(num);
-    return rounded.toFixed(2);
+    return formatExact(num);
   }
 
   function parseSafeNum(val) {
     if (val === '' || val === null || val === undefined || isNaN(val)) return 0;
-    return roundTwo(val);
+    return cleanFloat(val);
   }
 
   // --- Default Initial Tab Configurations & Definitions ---
   // Group A: Tabs 1 to 5 (Metal / Loss Calculation - Exact Decimal Precision)
-  // Group B: Tabs 6 to 8 (Order & Weight Tracking - 2-Decimal Precision)
-  // Group C: Tabs 9 & 10 (DROM / Deduction - 2-Decimal Precision)
+  // Group B: Tabs 6 to 8 (Order & Weight Tracking - Exact Decimal Precision)
+  // Group C: Tabs 9 & 10 (DROM / Deduction - Exact Decimal Precision)
   const DEFAULT_TABS_CONFIG = [
     { id: 'tab1', num: 1, group: 'A', defaultName: 'Tab 1' },
     { id: 'tab2', num: 2, group: 'A', defaultName: 'Tab 2' },
@@ -118,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const addRowBtn = document.getElementById('addRowBtn');
   const addBottomRowBtn = document.getElementById('addBottomRowBtn');
   const resetTableBtn = document.getElementById('resetTableBtn');
+  const narrationUndoBtn = document.getElementById('narrationUndoBtn');
   const openAddTabModalBtn = document.getElementById('openAddTabModalBtn');
   const onHandStockVal = document.getElementById('onHandStockVal');
   const physicalStockInput = document.getElementById('physicalStockInput');
@@ -133,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const editTabNameBtn = document.getElementById('editTabNameBtn');
   const subTabTitleInput = document.getElementById('subTabTitleInput');
   const subTabDateInput = document.getElementById('subTabDateInput');
+  const subTabUndoBtn = document.getElementById('subTabUndoBtn');
   const subTabAddRowBtn = document.getElementById('subTabAddRowBtn');
   const subTabBottomAddRowBtn = document.getElementById('subTabBottomAddRowBtn');
   const subTabResetBtn = document.getElementById('subTabResetBtn');
@@ -162,6 +162,289 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelModalBtn = document.getElementById('cancelModalBtn');
   const confirmModalBtn = document.getElementById('confirmModalBtn');
   let modalConfirmCallback = null;
+
+  // --- Per-Tab Isolated Undo System Engine (>= 25 Actions per Tab) ---
+  const MAX_UNDO_STACK_SIZE = 50; // At least 25 actions supported per tab (capacity 50)
+  const tabUndoStacks = {}; // { [tabId]: Array<Snapshot> }
+  let activeEditSnapshot = null;
+  let activeEditTabId = null;
+  let editDebounceTimer = null;
+
+  function getTabSnapshot(tabId) {
+    if (!tabId || !state.tabsData[tabId]) return null;
+    return {
+      data: JSON.parse(JSON.stringify(state.tabsData[tabId] || [])),
+      meta: JSON.parse(JSON.stringify(state.tabsMeta[tabId] || {}))
+    };
+  }
+
+  function areTabSnapshotsEqual(snapA, snapB) {
+    if (!snapA || !snapB) return false;
+    return JSON.stringify(snapA) === JSON.stringify(snapB);
+  }
+
+  function recordTabUndoState(tabId) {
+    if (!tabId || !state.tabsData[tabId]) return;
+    if (!tabUndoStacks[tabId]) {
+      tabUndoStacks[tabId] = [];
+    }
+    const snap = getTabSnapshot(tabId);
+    if (!snap) return;
+
+    const stack = tabUndoStacks[tabId];
+    if (stack.length > 0 && areTabSnapshotsEqual(stack[stack.length - 1], snap)) {
+      return;
+    }
+
+    stack.push(snap);
+    if (stack.length > MAX_UNDO_STACK_SIZE) {
+      stack.shift();
+    }
+    updateUndoButtonsUI();
+  }
+
+  function undoTabAction(tabId) {
+    if (!tabId || !tabUndoStacks[tabId] || tabUndoStacks[tabId].length === 0) {
+      return false;
+    }
+
+    // Reset cell editing tracking
+    activeEditSnapshot = null;
+    activeEditTabId = null;
+    clearTimeout(editDebounceTimer);
+
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+
+    const stack = tabUndoStacks[tabId];
+    const previousState = stack.pop();
+    if (!previousState) return false;
+
+    // Restore tab data and meta strictly limited to this tab
+    state.tabsData[tabId] = JSON.parse(JSON.stringify(previousState.data || []));
+    if (previousState.meta) {
+      state.tabsMeta[tabId] = JSON.parse(JSON.stringify(previousState.meta));
+    }
+
+    // Invalidate tab calculations & re-render
+    invalidateSubTab(tabId);
+    if (currentView === tabId) {
+      renderActiveSubTabView();
+    }
+    updateSidebarTabNames();
+    calculateReconciliation(true);
+    flushPendingSync();
+
+    const tabName = state.tabsMeta[tabId]?.name || 'Tab';
+    showToast(`Undid action in "${tabName}" (${stack.length} action${stack.length === 1 ? '' : 's'} remaining)`);
+    updateUndoButtonsUI();
+    return true;
+  }
+
+  function getNarrationSnapshot() {
+    const manualRows = [];
+    const manualRowEls = tableBody ? tableBody.querySelectorAll('tr:not([data-reserved-row])') : [];
+    manualRowEls.forEach(row => {
+      const narration = row.querySelector('.col-narration')?.value || '';
+      const c1Raw = row.querySelector('.col-1')?.value || '';
+      const c2Raw = row.querySelector('.col-2')?.value || '';
+      const c3Raw = row.querySelector('.col-3')?.value || '';
+      const shade = row.getAttribute('data-row-shade') || '';
+      manualRows.push({
+        narration,
+        c1: c1Raw !== '' ? formatExact(c1Raw) : '',
+        c2: c2Raw !== '' ? formatExact(c2Raw) : '',
+        c3: c3Raw !== '' ? formatExact(c3Raw) : '',
+        shade
+      });
+    });
+
+    const reservedRowShades = {};
+    if (tableBody) {
+      tableBody.querySelectorAll('tr[data-reserved-row]').forEach(row => {
+        const tabId = row.getAttribute('data-tab-id');
+        const shade = row.getAttribute('data-row-shade') || '';
+        if (tabId && shade) {
+          reservedRowShades[tabId] = shade;
+        }
+      });
+    }
+
+    return {
+      physicalStock: physicalStockInput ? physicalStockInput.value : '',
+      referenceNo: referenceInput ? referenceInput.value : '',
+      docDate: docDateInput ? docDateInput.value : '',
+      rows11Plus: manualRows,
+      reservedRowShades
+    };
+  }
+
+  function areNarrationSnapshotsEqual(snapA, snapB) {
+    if (!snapA || !snapB) return false;
+    return JSON.stringify(snapA) === JSON.stringify(snapB);
+  }
+
+  function recordNarrationUndoState() {
+    if (!tabUndoStacks['narration']) {
+      tabUndoStacks['narration'] = [];
+    }
+    const snap = getNarrationSnapshot();
+    const stack = tabUndoStacks['narration'];
+    if (stack.length > 0 && areNarrationSnapshotsEqual(stack[stack.length - 1], snap)) {
+      return;
+    }
+    stack.push(snap);
+    if (stack.length > MAX_UNDO_STACK_SIZE) {
+      stack.shift();
+    }
+    updateUndoButtonsUI();
+  }
+
+  function undoNarrationAction() {
+    const stack = tabUndoStacks['narration'];
+    if (!stack || stack.length === 0) return false;
+
+    activeEditSnapshot = null;
+    activeEditTabId = null;
+    clearTimeout(editDebounceTimer);
+
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+
+    const previousState = stack.pop();
+    if (!previousState) return false;
+
+    if (physicalStockInput) physicalStockInput.value = previousState.physicalStock || '';
+    if (referenceInput) referenceInput.value = previousState.referenceNo || '';
+    if (docDateInput) docDateInput.value = previousState.docDate || new Date().toISOString().split('T')[0];
+
+    if (Array.isArray(previousState.rows11Plus)) {
+      syncManualRowsDOM(previousState.rows11Plus);
+    }
+
+    if (tableBody && previousState.reservedRowShades) {
+      tableBody.querySelectorAll('tr[data-reserved-row]').forEach(tr => {
+        const tId = tr.getAttribute('data-tab-id');
+        const shade = previousState.reservedRowShades[tId] || '';
+        if (shade) tr.setAttribute('data-row-shade', shade);
+        else tr.removeAttribute('data-row-shade');
+        if (state.tabsMeta[tId]) state.tabsMeta[tId].rowShade = shade;
+      });
+    }
+
+    updateRowIndices();
+    calculateReconciliation(true);
+    flushPendingSync();
+    adjustAllTextareaHeights();
+    showToast(`Undid action in Narration (${stack.length} action${stack.length === 1 ? '' : 's'} remaining)`);
+    updateUndoButtonsUI();
+    return true;
+  }
+
+  function updateUndoButtonsUI() {
+    if (subTabUndoBtn) {
+      if (currentView && currentView.startsWith('tab')) {
+        const stack = tabUndoStacks[currentView] || [];
+        const count = stack.length;
+        subTabUndoBtn.disabled = (count === 0);
+        subTabUndoBtn.title = count > 0 
+          ? `Undo last action in this tab (${count} available - Ctrl+Z)` 
+          : `No actions to undo in this tab`;
+      } else {
+        subTabUndoBtn.disabled = true;
+      }
+    }
+
+    if (narrationUndoBtn) {
+      const stack = tabUndoStacks['narration'] || [];
+      const count = stack.length;
+      narrationUndoBtn.disabled = (count === 0);
+      narrationUndoBtn.title = count > 0 
+        ? `Undo last action in Narration (${count} available - Ctrl+Z)` 
+        : `No actions to undo in Narration`;
+    }
+  }
+
+  // --- Cell Editing Undo Session Activity Tracker ---
+  function handleCellEditingActivity() {
+    if (activeEditSnapshot && activeEditTabId) {
+      if (activeEditTabId === currentView) {
+        if (activeEditTabId.startsWith('tab')) {
+          const currentSnap = getTabSnapshot(activeEditTabId);
+          if (!areTabSnapshotsEqual(activeEditSnapshot, currentSnap)) {
+            const stack = tabUndoStacks[activeEditTabId] || (tabUndoStacks[activeEditTabId] = []);
+            if (stack.length === 0 || !areTabSnapshotsEqual(stack[stack.length - 1], activeEditSnapshot)) {
+              stack.push(activeEditSnapshot);
+              if (stack.length > MAX_UNDO_STACK_SIZE) stack.shift();
+              updateUndoButtonsUI();
+            }
+            activeEditSnapshot = null;
+          }
+        } else if (activeEditTabId === 'narration') {
+          const currentSnap = getNarrationSnapshot();
+          if (!areNarrationSnapshotsEqual(activeEditSnapshot, currentSnap)) {
+            const stack = tabUndoStacks['narration'] || (tabUndoStacks['narration'] = []);
+            if (stack.length === 0 || !areNarrationSnapshotsEqual(stack[stack.length - 1], activeEditSnapshot)) {
+              stack.push(activeEditSnapshot);
+              if (stack.length > MAX_UNDO_STACK_SIZE) stack.shift();
+              updateUndoButtonsUI();
+            }
+            activeEditSnapshot = null;
+          }
+        }
+      }
+    }
+
+    clearTimeout(editDebounceTimer);
+    editDebounceTimer = setTimeout(() => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+        if (currentView.startsWith('tab') && subTabContentArea && subTabContentArea.contains(activeEl)) {
+          activeEditTabId = currentView;
+          activeEditSnapshot = getTabSnapshot(currentView);
+        } else if (currentView === 'narration' && narrationView && narrationView.contains(activeEl)) {
+          activeEditTabId = 'narration';
+          activeEditSnapshot = getNarrationSnapshot();
+        }
+      }
+    }, 1200);
+  }
+
+  // Track cell focus across sheets
+  document.addEventListener('focusin', (e) => {
+    const target = e.target;
+    if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) return;
+    if (target.readOnly || target.disabled) return;
+
+    if (currentView.startsWith('tab')) {
+      if (subTabContentArea && subTabContentArea.contains(target)) {
+        activeEditTabId = currentView;
+        activeEditSnapshot = getTabSnapshot(currentView);
+      }
+    } else if (currentView === 'narration') {
+      if (narrationView && narrationView.contains(target)) {
+        activeEditTabId = 'narration';
+        activeEditSnapshot = getNarrationSnapshot();
+      }
+    }
+  });
+
+  // Attach Undo Button Click Listeners
+  if (subTabUndoBtn) {
+    subTabUndoBtn.addEventListener('click', () => {
+      if (currentView.startsWith('tab')) {
+        undoTabAction(currentView);
+      }
+    });
+  }
+
+  if (narrationUndoBtn) {
+    narrationUndoBtn.addEventListener('click', () => {
+      undoNarrationAction();
+    });
+  }
 
   // --- Lucide Icons Refresh Helper ---
   function refreshIcons(container = document) {
@@ -365,6 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clean up metadata & data
         delete state.tabsMeta[tabId];
         delete state.tabsData[tabId];
+        delete tabUndoStacks[tabId];
         delete subTabCache[tabId];
         dirtyTabs.delete(tabId);
 
@@ -479,14 +763,14 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
     } else if (cfg.group === 'B') {
-      // Group B: Order & Weight Tracking - 2-Decimal Precision
+      // Group B: Order & Weight Tracking - Exact Decimal Precision
       let totalCol2 = 0;
       let hasNumericEntry = false;
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
-        if (r.col2 !== '' && !isNaN(r.col2)) {
-          totalCol2 = roundTwo(totalCol2 + parseSafeNum(r.col2));
+        if (r.col2 !== '' && r.col2 !== null && r.col2 !== undefined && !isNaN(r.col2)) {
+          totalCol2 = cleanFloat(totalCol2 + cleanFloat(r.col2));
           hasNumericEntry = true;
         }
       }
@@ -494,11 +778,11 @@ document.addEventListener('DOMContentLoaded', () => {
       result = {
         hasData: hasNumericEntry,
         totalCol2,
-        narrationOutput: hasNumericEntry ? formatTwoDecimals(totalCol2) : ''
+        narrationOutput: hasNumericEntry ? formatExact(totalCol2) : ''
       };
 
     } else if (cfg.group === 'C') {
-      // Group C: DROM / Deduction - 2-Decimal Precision
+      // Group C: DROM / Deduction - Exact Decimal Precision
       let totalCol2 = 0;
       let totalCol3 = 0;
       let totalDiff = 0;
@@ -506,16 +790,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
-        const valA = r.col2 !== '' && !isNaN(r.col2) ? parseSafeNum(r.col2) : null;
-        const valB = r.col3 !== '' && !isNaN(r.col3) ? parseSafeNum(r.col3) : null;
+        const valA = (r.col2 !== '' && r.col2 !== null && r.col2 !== undefined && !isNaN(r.col2)) ? cleanFloat(r.col2) : null;
+        const valB = (r.col3 !== '' && r.col3 !== null && r.col3 !== undefined && !isNaN(r.col3)) ? cleanFloat(r.col3) : null;
 
         if (valA !== null || valB !== null) {
           hasNumericEntry = true;
           const a = valA !== null ? valA : 0;
           const b = valB !== null ? valB : 0;
-          totalCol2 = roundTwo(totalCol2 + a);
-          totalCol3 = roundTwo(totalCol3 + b);
-          totalDiff = roundTwo(totalDiff + (a - b));
+          totalCol2 = cleanFloat(totalCol2 + a);
+          totalCol3 = cleanFloat(totalCol3 + b);
+          totalDiff = cleanFloat(totalDiff + (a - b));
         }
       }
 
@@ -524,7 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
         totalCol2,
         totalCol3,
         totalDiff,
-        narrationOutput: hasNumericEntry ? formatTwoDecimals(totalDiff) : ''
+        narrationOutput: hasNumericEntry ? formatExact(totalDiff) : ''
       };
     }
 
@@ -558,7 +842,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sub-tab output into Column 4
         if (subResult.hasData && subResult.narrationOutput !== '') {
           const valNum = parseFloat(subResult.narrationOutput);
-          const formatted = (cfg.group === 'A') ? formatExact(subResult.narrationOutput) : formatTwoDecimals(valNum);
+          const formatted = formatExact(subResult.narrationOutput);
           if (col4Element.textContent !== formatted) {
             col4Element.textContent = formatted;
           }
@@ -582,16 +866,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const c3Input = row.querySelector('.col-3');
       const col4Element = row.querySelector('.col-4-display');
 
-      const c1 = roundTwo(c1Input?.value);
-      const c2 = roundTwo(c2Input?.value);
-      const c3 = roundTwo(c3Input?.value);
+      const c1 = cleanFloat(c1Input?.value);
+      const c2 = cleanFloat(c2Input?.value);
+      const c3 = cleanFloat(c3Input?.value);
 
       const hasValues = (c1Input?.value !== '' || c2Input?.value !== '' || c3Input?.value !== '');
       if (hasValues) {
         // Col 4 = Col 3 - Col 1 - Col 2
-        const col4Val = roundTwo(c3 - c1 - c2);
-        totalCol4 = roundTwo(totalCol4 + col4Val);
-        const formatted = formatTwoDecimals(col4Val);
+        const col4Val = cleanFloat(c3 - c1 - c2);
+        totalCol4 = cleanFloat(totalCol4 + col4Val);
+        const formatted = formatExact(col4Val);
         if (col4Element.textContent !== formatted) {
           col4Element.textContent = formatted;
         }
@@ -607,18 +891,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Update Narration Summary Footer
     if (onHandStockVal) {
-      const onHandFormatted = totalCol4 === 0 ? '' : formatTwoDecimals(totalCol4);
+      const onHandFormatted = totalCol4 === 0 ? '' : formatExact(totalCol4);
       if (onHandStockVal.textContent !== onHandFormatted) {
         onHandStockVal.textContent = onHandFormatted;
       }
     }
 
     const physicalStockRaw = physicalStockInput.value;
-    const physicalStock = physicalStockRaw !== '' ? roundTwo(physicalStockRaw) : 0;
-    const difference = roundTwo(physicalStock - totalCol4);
+    const physicalStock = physicalStockRaw !== '' ? cleanFloat(physicalStockRaw) : 0;
+    const difference = cleanFloat(physicalStock - totalCol4);
 
     if (differenceVal) {
-      const diffFormatted = (physicalStockRaw === '' && totalCol4 === 0) ? '' : formatTwoDecimals(difference);
+      const diffFormatted = (physicalStockRaw === '' && totalCol4 === 0) ? '' : formatExact(difference);
       if (differenceVal.textContent !== diffFormatted) {
         differenceVal.textContent = diffFormatted;
       }
@@ -652,9 +936,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const shade = row.getAttribute('data-row-shade') || '';
       manualRowsData.push({
         narration,
-        c1: c1Raw !== '' ? formatTwoDecimals(c1Raw) : '',
-        c2: c2Raw !== '' ? formatTwoDecimals(c2Raw) : '',
-        c3: c3Raw !== '' ? formatTwoDecimals(c3Raw) : '',
+        c1: c1Raw !== '' ? formatExact(c1Raw) : '',
+        c2: c2Raw !== '' ? formatExact(c2Raw) : '',
+        c3: c3Raw !== '' ? formatExact(c3Raw) : '',
         shade
       });
     });
@@ -781,6 +1065,8 @@ document.addEventListener('DOMContentLoaded', () => {
           const toIdx = tabsConfig.findIndex(t => t.id === tabId);
           if (fromIdx === -1 || toIdx === -1) return;
 
+          recordNarrationUndoState();
+
           const rect = tr.getBoundingClientRect();
           const isAbove = e.clientY < rect.top + rect.height / 2;
 
@@ -822,9 +1108,9 @@ document.addEventListener('DOMContentLoaded', () => {
     tr.className = 'manual-row';
     if (data.shade) tr.setAttribute('data-row-shade', data.shade);
 
-    const c1Formatted = data.c1 !== '' ? formatTwoDecimals(data.c1) : '';
-    const c2Formatted = data.c2 !== '' ? formatTwoDecimals(data.c2) : '';
-    const c3Formatted = data.c3 !== '' ? formatTwoDecimals(data.c3) : '';
+    const c1Val = data.c1 !== undefined && data.c1 !== null ? data.c1 : '';
+    const c2Val = data.c2 !== undefined && data.c2 !== null ? data.c2 : '';
+    const c3Val = data.c3 !== undefined && data.c3 !== null ? data.c3 : '';
 
     tr.innerHTML = `
       <td class="row-num-cell" data-label="NUMBER">
@@ -836,13 +1122,13 @@ document.addEventListener('DOMContentLoaded', () => {
         <textarea class="cell-textarea col-narration" placeholder="Enter narration..." rows="1">${data.narration || ''}</textarea>
       </td>
       <td data-label="1" data-col-idx="2">
-        <input type="text" inputmode="decimal" class="cell-input col-1" placeholder="" value="${c1Formatted}">
+        <input type="text" inputmode="decimal" class="cell-input col-1" placeholder="" value="${c1Val}">
       </td>
       <td data-label="2" data-col-idx="3">
-        <input type="text" inputmode="decimal" class="cell-input col-2" placeholder="" value="${c2Formatted}">
+        <input type="text" inputmode="decimal" class="cell-input col-2" placeholder="" value="${c2Val}">
       </td>
       <td data-label="3" data-col-idx="4">
-        <input type="text" inputmode="decimal" class="cell-input col-3" placeholder="" value="${c3Formatted}">
+        <input type="text" inputmode="decimal" class="cell-input col-3" placeholder="" value="${c3Val}">
       </td>
       <td class="computed-cell col-4-display" data-label="4" data-col-idx="5"></td>
       <td class="no-capture-cell" style="text-align: center;" data-html2canvas-ignore="true">
@@ -862,13 +1148,11 @@ document.addEventListener('DOMContentLoaded', () => {
     numInputs.forEach(input => {
       input.addEventListener('input', () => {
         input.value = input.value.replace(/[^0-9.-]/g, '');
+        handleCellEditingActivity();
         calculateReconciliation(true);
       });
       input.addEventListener('blur', () => {
-        if (input.value !== '') {
-          input.value = formatTwoDecimals(input.value);
-          calculateReconciliation(true);
-        }
+        calculateReconciliation(true);
         flushPendingSync();
       });
     });
@@ -877,6 +1161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     narrationInput.addEventListener('input', () => {
       narrationInput.style.height = 'auto';
       narrationInput.style.height = (narrationInput.scrollHeight + 2) + 'px';
+      handleCellEditingActivity();
       saveStateAndSync();
     });
     narrationInput.addEventListener('blur', flushPendingSync);
@@ -884,6 +1169,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Delete manual row directly
     tr.querySelector('.manual-delete-btn').addEventListener('click', (e) => {
       e.stopPropagation();
+      recordNarrationUndoState();
       clearRowSelection();
       tr.remove();
       updateRowIndices();
@@ -1022,14 +1308,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const entries = document.getElementById('metricItemEntriesVal');
       const totalCol2 = document.getElementById('metricTotalCol2Val');
       if (entries) entries.textContent = state.tabsData[cfg.id]?.length || 0;
-      if (totalCol2) totalCol2.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '—';
+      if (totalCol2) totalCol2.textContent = subResult.hasData ? formatExact(subResult.totalCol2) : '—';
     } else if (cfg.group === 'C') {
       const totalA = document.getElementById('metricTotalAVal');
       const totalB = document.getElementById('metricTotalBVal');
       const netDiff = document.getElementById('metricNetDiffVal');
-      if (totalA) totalA.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '—';
-      if (totalB) totalB.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalCol3) : '—';
-      if (netDiff) netDiff.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalDiff) : '—';
+      if (totalA) totalA.textContent = subResult.hasData ? formatExact(subResult.totalCol2) : '—';
+      if (totalB) totalB.textContent = subResult.hasData ? formatExact(subResult.totalCol3) : '—';
+      if (netDiff) netDiff.textContent = subResult.hasData ? formatExact(subResult.totalDiff) : '—';
     }
   }
 
@@ -1112,11 +1398,11 @@ document.addEventListener('DOMContentLoaded', () => {
         </td>
       `;
 
-      if (cfg.group === 'A') {
-        const col2Val = r.col2 !== '' && r.col2 !== undefined && r.col2 !== null ? r.col2 : '';
-        const col3Val = r.col3 !== '' && r.col3 !== undefined && r.col3 !== null ? r.col3 : '';
-        const col4Val = r.col4 !== '' && r.col4 !== undefined && r.col4 !== null ? r.col4 : '';
+      const col2Val = r.col2 !== '' && r.col2 !== undefined && r.col2 !== null ? r.col2 : '';
+      const col3Val = r.col3 !== '' && r.col3 !== undefined && r.col3 !== null ? r.col3 : '';
+      const col4Val = r.col4 !== '' && r.col4 !== undefined && r.col4 !== null ? r.col4 : '';
 
+      if (cfg.group === 'A') {
         tr.innerHTML = `
           ${rowNumHtml}
           <td data-col-idx="1">
@@ -1134,35 +1420,28 @@ document.addEventListener('DOMContentLoaded', () => {
           ${actionsHtml}
         `;
       } else if (cfg.group === 'B') {
-        const col2Formatted = r.col2 !== '' ? formatTwoDecimals(r.col2) : '';
-        const col3Formatted = r.col3 !== '' ? formatTwoDecimals(r.col3) : '';
-        const col4Formatted = r.col4 !== '' ? formatTwoDecimals(r.col4) : '';
-
         tr.innerHTML = `
           ${rowNumHtml}
           <td data-col-idx="1">
             <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
           <td data-col-idx="2">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${col2Formatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${col2Val}">
           </td>
           <td data-col-idx="3">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${col3Formatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${col3Val}">
           </td>
           <td data-col-idx="4">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Formatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-4" placeholder="" value="${col4Val}">
           </td>
           ${actionsHtml}
         `;
       } else if (cfg.group === 'C') {
-        const valAFormatted = r.col2 !== '' ? formatTwoDecimals(r.col2) : '';
-        const valBFormatted = r.col3 !== '' ? formatTwoDecimals(r.col3) : '';
-
         let rowDiffFormatted = '';
         if (r.col2 !== '' || r.col3 !== '') {
-          const a = parseSafeNum(r.col2);
-          const b = parseSafeNum(r.col3);
-          rowDiffFormatted = formatTwoDecimals(roundTwo(a - b));
+          const a = cleanFloat(r.col2);
+          const b = cleanFloat(r.col3);
+          rowDiffFormatted = formatExact(a - b);
         }
 
         tr.innerHTML = `
@@ -1171,10 +1450,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <textarea class="cell-textarea subtab-col-1" rows="1" placeholder="Item description...">${r.col1 || ''}</textarea>
           </td>
           <td data-col-idx="2">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${valAFormatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-2" placeholder="" value="${col2Val}">
           </td>
           <td data-col-idx="3">
-            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${valBFormatted}">
+            <input type="text" inputmode="decimal" class="cell-input subtab-col-3" placeholder="" value="${col3Val}">
           </td>
           <td class="computed-cell subtab-col-diff" data-col-idx="4">
             ${rowDiffFormatted}
@@ -1198,15 +1477,16 @@ document.addEventListener('DOMContentLoaded', () => {
           shade: tr.getAttribute('data-row-shade') || ''
         };
 
+        handleCellEditingActivity();
         invalidateSubTab(cfg.id);
 
         // If Group C, update row difference immediately
         if (cfg.group === 'C') {
           const diffCell = tr.querySelector('.subtab-col-diff');
           if (col2Input.value !== '' || col3Input.value !== '') {
-            const a = parseSafeNum(col2Input.value);
-            const b = parseSafeNum(col3Input.value);
-            diffCell.textContent = formatTwoDecimals(roundTwo(a - b));
+            const a = cleanFloat(col2Input.value);
+            const b = cleanFloat(col3Input.value);
+            diffCell.textContent = formatExact(a - b);
           } else {
             diffCell.textContent = '';
           }
@@ -1234,10 +1514,7 @@ document.addEventListener('DOMContentLoaded', () => {
           handleCellInput();
         });
         inp.addEventListener('blur', () => {
-          if (cfg.group !== 'A' && inp.value !== '') {
-            inp.value = formatTwoDecimals(inp.value);
-            handleCellInput();
-          }
+          handleCellInput();
           flushPendingSync();
         });
       });
@@ -1245,6 +1522,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Delete row button
       tr.querySelector('.subtab-delete-row-btn').addEventListener('click', (e) => {
         e.stopPropagation();
+        recordTabUndoState(cfg.id);
         clearRowSelection();
         state.tabsData[cfg.id].splice(idx, 1);
         if (state.tabsData[cfg.id].length === 0) {
@@ -1306,6 +1584,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const tabData = state.tabsData[cfg.id];
           if (!tabData) return;
+
+          recordTabUndoState(cfg.id);
 
           const movedItem = tabData.splice(draggedSubTabRowIndex, 1)[0];
           let newInsertIdx = targetIdx;
@@ -1401,14 +1681,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (loss) loss.textContent = subResult.hasData ? formatExact(subResult.netLoss) : '';
     } else if (cfg.group === 'B') {
       const t2 = document.getElementById('footTotalCol2');
-      if (t2) t2.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '';
+      if (t2) t2.textContent = subResult.hasData ? formatExact(subResult.totalCol2) : '';
     } else if (cfg.group === 'C') {
       const a = document.getElementById('footTotalA');
       const b = document.getElementById('footTotalB');
       const diff = document.getElementById('footTotalDiff');
-      if (a) a.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '';
-      if (b) b.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalCol3) : '';
-      if (diff) diff.textContent = subResult.hasData ? formatTwoDecimals(subResult.totalDiff) : '';
+      if (a) a.textContent = subResult.hasData ? formatExact(subResult.totalCol2) : '';
+      if (b) b.textContent = subResult.hasData ? formatExact(subResult.totalCol3) : '';
+      if (diff) diff.textContent = subResult.hasData ? formatExact(subResult.totalDiff) : '';
     }
   }
 
@@ -1416,6 +1696,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function switchView(viewId) {
     currentView = viewId;
+    activeEditSnapshot = null;
+    activeEditTabId = null;
+    clearTimeout(editDebounceTimer);
     if (typeof clearRowSelection === 'function') clearRowSelection();
     if (typeof clearCellSelection === 'function') clearCellSelection();
 
@@ -1430,8 +1713,9 @@ document.addEventListener('DOMContentLoaded', () => {
       renderActiveSubTabView();
     }
 
-    // Update Sidebar active state
+    // Update Sidebar active state & Undo button state
     updateSidebarUI();
+    updateUndoButtonsUI();
 
     refreshIcons();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1593,7 +1877,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renameTab(tabId, newName) {
     if (!newName || !state.tabsMeta[tabId]) return;
+    if (state.tabsMeta[tabId].name === newName) return;
 
+    recordTabUndoState(tabId);
     state.tabsMeta[tabId].name = newName;
 
     // Update subtab header if active
@@ -1652,6 +1938,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (subTabDateInput) {
     subTabDateInput.addEventListener('input', () => {
       if (currentView.startsWith('tab')) {
+        recordTabUndoState(currentView);
         state.tabsMeta[currentView].date = subTabDateInput.value;
         saveStateAndSync();
       }
@@ -1662,6 +1949,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleAddSubTabRow() {
     if (!currentView.startsWith('tab')) return;
     const tabId = currentView;
+    recordTabUndoState(tabId);
     if (!state.tabsData[tabId]) {
       state.tabsData[tabId] = [];
     }
@@ -1704,6 +1992,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `Reset ${tabName}?`,
         `This action will clear all row entries in "${tabName}" without affecting other tabs or the main Narration sheet.`,
         () => {
+          recordTabUndoState(currentView);
           state.tabsData[currentView] = [
             { col1: '', col2: '', col3: '', col4: '' },
             { col1: '', col2: '', col3: '', col4: '' },
@@ -1728,6 +2017,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Add Manual Row
   const handleAddManualRow = () => {
+    recordNarrationUndoState();
     createManualRowElement();
     updateRowIndices();
     calculateReconciliation(true);
@@ -1746,6 +2036,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'Reset Narration Table?',
         'This will clear manual rows and reset Document Date, Ref, and Physical Stock. Sub-sheet data will remain safe.',
         () => {
+          recordNarrationUndoState();
           // Remove manual rows
           const manualRows = tableBody.querySelectorAll('tr:not([data-reserved-row])');
           manualRows.forEach(r => r.remove());
@@ -1768,18 +2059,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // Narration Document Inputs
   physicalStockInput.addEventListener('input', () => {
     physicalStockInput.value = physicalStockInput.value.replace(/[^0-9.-]/g, '');
+    handleCellEditingActivity();
     calculateReconciliation(true);
   });
   physicalStockInput.addEventListener('blur', () => {
-    if (physicalStockInput.value !== '') {
-      physicalStockInput.value = formatTwoDecimals(physicalStockInput.value);
-      calculateReconciliation(true);
-    }
+    calculateReconciliation(true);
     flushPendingSync();
   });
-  referenceInput.addEventListener('input', () => calculateReconciliation(true));
+  referenceInput.addEventListener('input', () => {
+    handleCellEditingActivity();
+    calculateReconciliation(true);
+  });
   referenceInput.addEventListener('blur', flushPendingSync);
-  docDateInput.addEventListener('input', () => calculateReconciliation(true));
+  docDateInput.addEventListener('input', () => {
+    handleCellEditingActivity();
+    calculateReconciliation(true);
+  });
   docDateInput.addEventListener('blur', flushPendingSync);
 
   // --- Three-Tier Real-Time Synchronization Engine ---
@@ -1935,9 +2230,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const shade = row.getAttribute('data-row-shade') || '';
       manualRows.push({
         narration,
-        c1: c1Raw !== '' ? formatTwoDecimals(c1Raw) : '',
-        c2: c2Raw !== '' ? formatTwoDecimals(c2Raw) : '',
-        c3: c3Raw !== '' ? formatTwoDecimals(c3Raw) : '',
+        c1: c1Raw !== '' ? formatExact(c1Raw) : '',
+        c2: c2Raw !== '' ? formatExact(c2Raw) : '',
+        c3: c3Raw !== '' ? formatExact(c3Raw) : '',
         shade
       });
     });
@@ -2205,7 +2500,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 4. Narration Document & Rows Merge
     if (data.narration) {
       if (data.narration.physicalStock !== undefined && activeEl !== physicalStockInput) {
-        physicalStockInput.value = data.narration.physicalStock !== '' ? formatTwoDecimals(data.narration.physicalStock) : '';
+        physicalStockInput.value = data.narration.physicalStock !== '' ? formatExact(data.narration.physicalStock) : '';
       }
       if (data.narration.referenceNo !== undefined && activeEl !== referenceInput) {
         referenceInput.value = data.narration.referenceNo;
@@ -2310,6 +2605,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function applyShadeToRows(targetRows, shade) {
     if (!targetRows || targetRows.length === 0) return;
+
+    if (currentView === 'narration') {
+      recordNarrationUndoState();
+    } else if (currentView.startsWith('tab')) {
+      recordTabUndoState(currentView);
+    }
 
     targetRows.forEach(tr => {
       if (shade) {
@@ -2445,6 +2746,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resetAllBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (currentView === 'narration') {
+            recordNarrationUndoState();
             // Revert all reserved rows in reconciliation
             Object.keys(state.tabsMeta).forEach(tId => {
               if (state.tabsMeta[tId]) {
@@ -2466,6 +2768,7 @@ document.addEventListener('DOMContentLoaded', () => {
               });
             }
           } else if (currentView.startsWith('tab')) {
+            recordTabUndoState(currentView);
             // Revert all rows in active subtab
             const tabRows = state.tabsData[currentView];
             if (Array.isArray(tabRows)) {
@@ -2572,6 +2875,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (currentIdx === -1) return;
 
       closeFloatingPalette();
+      if (typeof clearCellSelection === 'function') clearCellSelection();
 
       let lastRow = isNarration ? lastSelectedNarrationRow : lastSelectedSubTabRow;
 
@@ -2684,12 +2988,29 @@ document.addEventListener('DOMContentLoaded', () => {
       closeFloatingPalette();
     });
 
-    // 4. Escape key clears row selection, cell selection, and closes popovers
+    // 4. Keyboard Shortcuts: Escape clears selections/popovers; Ctrl+Z/Cmd+Z triggers Per-Tab Undo
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         closeFloatingPalette();
         clearRowSelection();
         clearCellSelection();
+      }
+
+      // Per-Tab Isolated Undo Shortcut (Ctrl+Z / Cmd+Z)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+        if (confirmModal && !confirmModal.classList.contains('hidden')) return;
+
+        if (currentView === 'narration') {
+          if (tabUndoStacks['narration'] && tabUndoStacks['narration'].length > 0) {
+            e.preventDefault();
+            undoNarrationAction();
+          }
+        } else if (currentView && currentView.startsWith('tab')) {
+          if (tabUndoStacks[currentView] && tabUndoStacks[currentView].length > 0) {
+            e.preventDefault();
+            undoTabAction(currentView);
+          }
+        }
       }
     });
   }
@@ -2745,7 +3066,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const savedPhysicalStock = localStorage.getItem(STORAGE_KEYS.PHYSICAL_STOCK) || localStorage.getItem(STORAGE_KEYS.LEGACY_STOCK_V8);
       if (savedPhysicalStock !== null && savedPhysicalStock !== '') {
-        physicalStockInput.value = formatTwoDecimals(savedPhysicalStock);
+        physicalStockInput.value = formatExact(savedPhysicalStock);
       }
 
       const savedRefNo = localStorage.getItem(STORAGE_KEYS.REFERENCE_NO) || localStorage.getItem(STORAGE_KEYS.LEGACY_REF_V8);
@@ -2801,6 +3122,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 8. Connect Multi-Device Synchronization (Firebase & Supabase)
     initSupabaseSync();
     initFirebaseSync();
+
+    // 9. Initialize Undo Buttons
+    updateUndoButtonsUI();
   }
 
   // --- Report Image Export ---
@@ -2949,7 +3273,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       const onHandVal = document.getElementById('onHandStockVal')?.textContent || '';
-      const physicalVal = physicalStockInput?.value !== '' ? formatTwoDecimals(physicalStockInput.value) : '';
+      const physicalVal = physicalStockInput?.value !== '' ? formatExact(physicalStockInput.value) : '';
       const diffVal = document.getElementById('differenceVal')?.textContent || '';
 
       const summary = [
@@ -2996,32 +3320,32 @@ document.addEventListener('DOMContentLoaded', () => {
       rows = rowsData.map((r, idx) => [
         String(idx + 1),
         r.col1 || '',
-        r.col2 !== '' && r.col2 !== undefined ? formatTwoDecimals(r.col2) : '',
-        r.col3 !== '' && r.col3 !== undefined ? formatTwoDecimals(r.col3) : '',
-        r.col4 !== '' && r.col4 !== undefined ? formatTwoDecimals(r.col4) : ''
+        r.col2 !== '' && r.col2 !== undefined && r.col2 !== null ? String(r.col2) : '',
+        r.col3 !== '' && r.col3 !== undefined && r.col3 !== null ? String(r.col3) : '',
+        r.col4 !== '' && r.col4 !== undefined && r.col4 !== null ? String(r.col4) : ''
       ]);
       summary = [
-        ['', 'TOTAL', subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '', '', '']
+        ['', 'TOTAL', subResult.hasData ? formatExact(subResult.totalCol2) : '', '', '']
       ];
     } else if (cfg.group === 'C') {
       headers = ['No.', 'DROM / Item Name', 'Input Value A', 'Input Value B', 'Difference'];
       rows = rowsData.map((r, idx) => {
         let diffStr = '';
         if (r.col2 !== '' || r.col3 !== '') {
-          const a = parseSafeNum(r.col2);
-          const b = parseSafeNum(r.col3);
-          diffStr = formatTwoDecimals(roundTwo(a - b));
+          const a = cleanFloat(r.col2);
+          const b = cleanFloat(r.col3);
+          diffStr = formatExact(a - b);
         }
         return [
           String(idx + 1),
           r.col1 || '',
-          r.col2 !== '' && r.col2 !== undefined ? formatTwoDecimals(r.col2) : '',
-          r.col3 !== '' && r.col3 !== undefined ? formatTwoDecimals(r.col3) : '',
+          r.col2 !== '' && r.col2 !== undefined && r.col2 !== null ? String(r.col2) : '',
+          r.col3 !== '' && r.col3 !== undefined && r.col3 !== null ? String(r.col3) : '',
           diffStr
         ];
       });
       summary = [
-        ['', 'TOTAL', subResult.hasData ? formatTwoDecimals(subResult.totalCol2) : '', subResult.hasData ? formatTwoDecimals(subResult.totalCol3) : '', subResult.hasData ? formatTwoDecimals(subResult.totalDiff) : '']
+        ['', 'TOTAL', subResult.hasData ? formatExact(subResult.totalCol2) : '', subResult.hasData ? formatExact(subResult.totalCol3) : '', subResult.hasData ? formatExact(subResult.totalDiff) : '']
       ];
     }
 
@@ -3153,6 +3477,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.ledger-table td.cell-selected').forEach(td => {
       td.classList.remove('cell-selected');
     });
+    document.querySelectorAll('.ledger-table tr.has-selected-cells').forEach(tr => {
+      tr.classList.remove('has-selected-cells');
+    });
     activeRangeSelection = null;
   }
 
@@ -3190,12 +3517,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const allRows = getTableDataRows(table);
     const selectedCells = [];
 
-    // Clear previous cell selections in active table
+    // Clear previous cell selections and row highlights in active table
     table.querySelectorAll('.cell-selected').forEach(cell => cell.classList.remove('cell-selected'));
+    table.querySelectorAll('tr.has-selected-cells').forEach(tr => tr.classList.remove('has-selected-cells'));
 
     for (let r = minRow; r <= maxRow; r++) {
       const tr = allRows[r];
       if (!tr) continue;
+      tr.classList.add('has-selected-cells');
 
       for (let c = minCol; c <= maxCol; c++) {
         const cell = tr.querySelector(`td[data-col-idx="${c}"]`);
@@ -3230,12 +3559,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Clear full-row selection when user clicks a specific cell
+    if (typeof clearRowSelection === 'function') {
+      clearRowSelection();
+    }
+
     const coords = getCellCoordinates(td);
     if (!coords) return;
 
     isCellMouseDown = true;
     dragStartCoords = coords;
     isDraggingCellRange = false;
+    updateRangeHighlight(coords, coords);
   });
 
   document.addEventListener('mousemove', (e) => {
@@ -3262,8 +3597,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
       }
-    } else if (isCellMouseDown && !isDraggingCellRange) {
-      clearCellSelection();
     }
     isCellMouseDown = false;
     dragStartCoords = null;
@@ -3502,6 +3835,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const startRowIdx = allTrs.indexOf(targetTr);
       if (startRowIdx === -1) return;
 
+      recordTabUndoState(tabId);
+
       const colKeys = ['col1', 'col2', 'col3', 'col4'];
       let startColIdx = 0;
       if (target.classList.contains('subtab-col-2')) startColIdx = 1;
@@ -3553,6 +3888,8 @@ document.addEventListener('DOMContentLoaded', () => {
       let allTrs = Array.from(tableBody.querySelectorAll('tr'));
       const startRowIdx = allTrs.indexOf(targetTr);
       if (startRowIdx === -1) return;
+
+      recordNarrationUndoState();
 
       let startColIdx = 0;
       if (target.classList.contains('col-1')) startColIdx = 1;

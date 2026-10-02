@@ -4,7 +4,7 @@
   --bg-card: #ffffff;
   --bg-input: #fff9f6;
   --border-color: #f0cbb5;
-  --border-focus: #2563eb;
+  --border-focus: #d66b30;
   --text-primary: #4a2c1b;
   --text-secondary: #855a43;
   --text-muted: #bca290;
@@ -13,8 +13,10 @@
   --primary-hover: #b8531d;
   --primary-light: rgba(214, 107, 48, 0.1);
 
-  --cell-focus-blue: #2563eb;
-  --cell-focus-blue-bg: rgba(37, 99, 235, 0.08);
+  --cell-selection-border: #d66b30;
+  --cell-selection-border-vibrant: #ea580c;
+  --row-selected-bg: rgba(214, 107, 48, 0.12);
+  --row-selected-border: #d66b30;
 
   --accent-emerald: #10b981;
   --accent-rose: #ef4444;
@@ -205,6 +207,39 @@ body {
 .btn-outline:hover {
   background-color: var(--primary-light);
   border-color: var(--primary-color);
+}
+
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.undo-tab-btn {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+}
+
+.undo-tab-btn:disabled,
+.undo-tab-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+  border-color: var(--border-color);
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.undo-tab-btn:not(:disabled):hover {
+  background-color: var(--primary-light);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .btn-sm {
@@ -415,15 +450,15 @@ input[type="date"].ref-input {
   box-sizing: border-box;
 }
 
-/* Clear blue border structure for focused / selected table cells */
+/* Clear vibrant border structure for focused / selected table cells */
 .ledger-table td:focus-within {
   position: relative;
   z-index: 5;
 }
 
 .cell-input:focus, .cell-textarea:focus {
-  background-color: var(--cell-focus-blue-bg) !important;
-  box-shadow: inset 0 0 0 2px var(--cell-focus-blue) !important;
+  background-color: transparent !important;
+  box-shadow: inset 0 0 0 2.5px var(--cell-selection-border-vibrant) !important;
   outline: none !important;
   position: relative;
   z-index: 6;
@@ -536,8 +571,8 @@ input[type="number"] {
 }
 
 .summary-table-input:focus {
-  background-color: var(--cell-focus-blue-bg) !important;
-  box-shadow: inset 0 0 0 2px var(--cell-focus-blue) !important;
+  background-color: transparent !important;
+  box-shadow: inset 0 0 0 2.5px var(--cell-selection-border-vibrant) !important;
   outline: none !important;
   position: relative;
   z-index: 6;
@@ -1470,23 +1505,25 @@ body.is-exporting-image .cell-textarea {
   cursor: text;
 }
 
-/* Multi-Cell Drag & Range Selection Highlight (Excel / Google Sheets style) */
+/* Multi-Cell Drag & Range Selection Highlight (Border-Only Vibrant Highlight) */
 .ledger-table td.cell-selected {
-  background-color: rgba(37, 99, 235, 0.14) !important;
-  box-shadow: inset 0 0 0 1.5px rgba(37, 99, 235, 0.7) !important;
+  background-color: transparent !important;
+  box-shadow: inset 0 0 0 2.5px var(--cell-selection-border-vibrant) !important;
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .ledger-table td.cell-selected .cell-input,
 .ledger-table td.cell-selected .cell-textarea {
   background-color: transparent !important;
-  color: #1e40af !important;
+  color: var(--text-primary) !important;
 }
 
 .ledger-table td.cell-selected.computed-cell {
-  background-color: rgba(37, 99, 235, 0.2) !important;
-  color: #1e40af !important;
+  background-color: transparent !important;
+  box-shadow: inset 0 0 0 2.5px var(--cell-selection-border-vibrant) !important;
+  position: relative;
+  z-index: 2;
 }
 
 /* Flash animation on successful copy */
@@ -1815,68 +1852,132 @@ body.is-exporting-image .cell-textarea {
 
 /* ==========================================================================
    ROW BACKGROUND SHADES & SELECTION STYLES (Stock Reconciliation across all tabs)
-   Four Distinct, Theme-Complementary Pastel Shades:
-   1. Warm Peach (#fff1e6) - Complements warm terracotta/peach brand theme
-   2. Mint Sage (#ecfdf5) - Complements Group B emerald/success accents
-   3. Soft Periwinkle (#eef2ff) - Complements Group C indigo/periwinkle accents
-   4. Rose Blush (#fff0f3) - Complements accent-rose & highlight differences
+   Four Distinct, Theme-Complementary Vibrant Highlighter Shades:
+   1. Warm Peach / Amber Glow (#fed7aa) - Vibrant warm amber highlight
+   2. Mint Sage / Spring Emerald (#a7f3d0) - Vibrant fresh emerald mint highlight
+   3. Soft Periwinkle / Electric Indigo (#c7d2fe) - Vibrant luminous periwinkle highlight
+   4. Rose Blush / Coral Pink (#fecdd3) - Vibrant eye-catching rose highlight
    ========================================================================== */
 
 /* 1. Warm Peach / Amber Glow */
 tr[data-row-shade="peach"] td {
-  background-color: #fff1e6 !important;
+  background-color: #fed7aa !important;
 }
 tr[data-row-shade="peach"] .row-num-cell,
 tr[data-row-shade="peach"] .computed-cell {
-  background-color: #fde5d4 !important;
+  background-color: #fdba74 !important;
 }
 tr[data-row-shade="peach"]:hover td {
-  background-color: #ffe9dc !important;
+  background-color: #fecba1 !important;
 }
 
 /* 2. Soft Mint / Sage Green */
 tr[data-row-shade="mint"] td {
-  background-color: #ecfdf5 !important;
+  background-color: #a7f3d0 !important;
 }
 tr[data-row-shade="mint"] .row-num-cell,
 tr[data-row-shade="mint"] .computed-cell {
-  background-color: #daf5e7 !important;
+  background-color: #6ee7b7 !important;
 }
 tr[data-row-shade="mint"]:hover td {
-  background-color: #e2faee !important;
+  background-color: #93ebd0 !important;
 }
 
 /* 3. Soft Periwinkle / Sky Blue */
 tr[data-row-shade="periwinkle"] td {
-  background-color: #eef2ff !important;
+  background-color: #c7d2fe !important;
 }
 tr[data-row-shade="periwinkle"] .row-num-cell,
 tr[data-row-shade="periwinkle"] .computed-cell {
-  background-color: #dee5fc !important;
+  background-color: #a5b4fc !important;
 }
 tr[data-row-shade="periwinkle"]:hover td {
-  background-color: #e6ebff !important;
+  background-color: #bccaff !important;
 }
 
 /* 4. Rose Blush / Soft Coral */
 tr[data-row-shade="rose"] td {
-  background-color: #fff0f3 !important;
+  background-color: #fecdd3 !important;
 }
 tr[data-row-shade="rose"] .row-num-cell,
 tr[data-row-shade="rose"] .computed-cell {
-  background-color: #fedee5 !important;
+  background-color: #fda4af !important;
 }
 tr[data-row-shade="rose"]:hover td {
-  background-color: #ffe4ea !important;
+  background-color: #fdbdc6 !important;
 }
 
-/* Row Selection State - clean blue structure */
+/* Row Selection State - Uniform Theme Styling Across All Columns */
 tr.row-selected td {
-  background-color: rgba(37, 99, 235, 0.08) !important;
+  background-color: var(--row-selected-bg) !important;
+  border-top: 1px solid var(--row-selected-border) !important;
+  border-bottom: 1px solid var(--row-selected-border) !important;
 }
+
+tr.row-selected td:first-child {
+  border-left: 2px solid var(--row-selected-border) !important;
+}
+
+tr.row-selected td:last-child {
+  border-right: 2px solid var(--row-selected-border) !important;
+}
+
 tr.row-selected .row-num-cell {
-  background-color: rgba(37, 99, 235, 0.18) !important;
-  color: #2563eb !important;
+  background-color: rgba(214, 107, 48, 0.22) !important;
+  color: var(--primary-color) !important;
+  font-weight: 800;
+}
+
+tr.row-selected .computed-cell,
+tr.row-selected .reserved-input,
+tr.row-selected .reserved-col-4,
+tr.row-selected .cell-input,
+tr.row-selected .cell-textarea,
+tr.row-selected .desc-cell {
+  background-color: var(--row-selected-bg) !important;
+}
+
+/* Shaded rows when selected: enhance background and apply crisp selection borders */
+tr.row-selected[data-row-shade="peach"] td,
+tr.row-selected[data-row-shade="peach"] .row-num-cell,
+tr.row-selected[data-row-shade="peach"] .computed-cell {
+  background-color: #fdba74 !important;
+  border-top: 2px solid var(--row-selected-border) !important;
+  border-bottom: 2px solid var(--row-selected-border) !important;
+}
+
+tr.row-selected[data-row-shade="mint"] td,
+tr.row-selected[data-row-shade="mint"] .row-num-cell,
+tr.row-selected[data-row-shade="mint"] .computed-cell {
+  background-color: #6ee7b7 !important;
+  border-top: 2px solid var(--row-selected-border) !important;
+  border-bottom: 2px solid var(--row-selected-border) !important;
+}
+
+tr.row-selected[data-row-shade="periwinkle"] td,
+tr.row-selected[data-row-shade="periwinkle"] .row-num-cell,
+tr.row-selected[data-row-shade="periwinkle"] .computed-cell {
+  background-color: #a5b4fc !important;
+  border-top: 2px solid var(--row-selected-border) !important;
+  border-bottom: 2px solid var(--row-selected-border) !important;
+}
+
+tr.row-selected[data-row-shade="rose"] td,
+tr.row-selected[data-row-shade="rose"] .row-num-cell,
+tr.row-selected[data-row-shade="rose"] .computed-cell {
+  background-color: #fda4af !important;
+  border-top: 2px solid var(--row-selected-border) !important;
+  border-bottom: 2px solid var(--row-selected-border) !important;
+}
+
+/* Rows containing active cell selection */
+tr.has-selected-cells {
+  background-color: rgba(214, 107, 48, 0.04);
+}
+
+tr.has-selected-cells .row-num-cell {
+  background-color: rgba(214, 107, 48, 0.14) !important;
+  color: var(--primary-color) !important;
   font-weight: 800;
 }
 
@@ -1888,7 +1989,7 @@ tr.row-selected .row-num-cell {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 .row-num-cell:hover {
-  background-color: rgba(37, 99, 235, 0.12) !important;
+  background-color: var(--primary-light) !important;
 }
 .row-num-wrapper {
   display: flex;
@@ -2007,17 +2108,21 @@ tr.row-selected .row-num-cell {
   z-index: 5;
 }
 
-.sticky-swatch-btn.swatch-peach {
-  background-color: #f6a574;
+.sticky-swatch-btn.swatch-peach,
+.swatch-btn.swatch-peach {
+  background-color: #f97316 !important;
 }
-.sticky-swatch-btn.swatch-mint {
-  background-color: #34d399;
+.sticky-swatch-btn.swatch-mint,
+.swatch-btn.swatch-mint {
+  background-color: #10b981 !important;
 }
-.sticky-swatch-btn.swatch-periwinkle {
-  background-color: #818cf8;
+.sticky-swatch-btn.swatch-periwinkle,
+.swatch-btn.swatch-periwinkle {
+  background-color: #6366f1 !important;
 }
-.sticky-swatch-btn.swatch-rose {
-  background-color: #fb7185;
+.sticky-swatch-btn.swatch-rose,
+.swatch-btn.swatch-rose {
+  background-color: #f43f5e !important;
 }
 
 .sticky-panel-divider {
@@ -2111,6 +2216,23 @@ tr.row-selected .row-num-cell {
 @keyframes popoverFadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.row-palette-popover .swatch-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px var(--border-color), 0 2px 4px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+}
+
+.row-palette-popover .swatch-btn:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px var(--primary-color), 0 3px 8px rgba(0, 0, 0, 0.15);
+  z-index: 5;
 }
 
 /* ==========================================================================
