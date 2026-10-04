@@ -100,19 +100,19 @@
     }
   } catch (e) {}
 
-  // Normalize slots to at least columnCount
-  const normalizeItemSlots = (rawSlots, minCols = 1) => {
+  // Normalize slots to EXACTLY targetCols (pad if fewer, strictly slice if more)
+  const normalizeItemSlots = (rawSlots, targetCols = 3) => {
     let arr = [];
     if (Array.isArray(rawSlots)) {
       arr = rawSlots.map(s => s || {});
     } else if (rawSlots && typeof rawSlots === 'object') {
       arr = Object.keys(rawSlots).sort((a,b) => Number(a)-Number(b)).map(k => rawSlots[k] || {});
     }
-    const targetLen = Math.max(minCols, arr.length);
-    while (arr.length < targetLen) {
+    const cols = Math.max(1, targetCols);
+    while (arr.length < cols) {
       arr.push({ date: '', toolName: '', toolCode: '', price: '' });
     }
-    return arr.slice(0, targetLen).map(s => ({
+    return arr.slice(0, cols).map(s => ({
       date: (s.date || '').toUpperCase(),
       toolName: (s.toolName || '').toUpperCase(),
       toolCode: (s.toolCode || '').toUpperCase(),
@@ -121,7 +121,7 @@
   };
 
   // Normalize subclasses capturing one-to-many relationship securely
-  const normalizeSubclasses = (rawSubclasses, minCols = 1, legacySlots = [], legacySubClass = '') => {
+  const normalizeSubclasses = (rawSubclasses, targetCols = 3, legacySlots = [], legacySubClass = '') => {
     let subs = [];
     if (Array.isArray(rawSubclasses)) {
       subs = rawSubclasses.filter(Boolean);
@@ -129,9 +129,11 @@
       subs = Object.keys(rawSubclasses).sort((a,b) => Number(a)-Number(b)).map(k => rawSubclasses[k]).filter(Boolean);
     }
 
+    const cols = Math.max(1, targetCols);
+
     if (subs.length === 0) {
       const defaultPrices = [];
-      for (let c = 0; c < minCols; c++) {
+      for (let c = 0; c < cols; c++) {
         const p = legacySlots && legacySlots[c] && legacySlots[c].price ? String(legacySlots[c].price) : '';
         defaultPrices.push(p.toUpperCase());
       }
@@ -149,13 +151,13 @@
       } else if (sub.prices && typeof sub.prices === 'object') {
         pricesArr = Object.keys(sub.prices).sort((a,b) => Number(a)-Number(b)).map(k => sub.prices[k]);
       }
-      while (pricesArr.length < minCols) {
+      while (pricesArr.length < cols) {
         pricesArr.push('');
       }
       return {
         id: sub.id || `sub-${sIdx + 1}`,
         name: (sub.name !== undefined && sub.name !== null ? String(sub.name) : '').toUpperCase(),
-        prices: pricesArr.slice(0, Math.max(minCols, pricesArr.length)).map(p => (p !== undefined && p !== null ? String(p).toUpperCase() : ''))
+        prices: pricesArr.slice(0, cols).map(p => (p !== undefined && p !== null ? String(p).toUpperCase() : ''))
       };
     });
   };
@@ -279,7 +281,7 @@
         // Read metadata if available
         if (val['_column_meta'] && val['_column_meta'].columnCount) {
           const metaCols = parseInt(val['_column_meta'].columnCount, 10);
-          if (metaCols >= 1 && metaCols !== columnCount) {
+          if (!isNaN(metaCols) && metaCols >= 1) {
             columnCount = metaCols;
           }
         }
@@ -302,15 +304,10 @@
         });
         list.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
         
-        const currentHash = JSON.stringify(list) + `::cols=${columnCount}`;
+        const currentHash = JSON.stringify({ list, columnCount });
         if (currentHash !== lastFetchedHash || forceRender) {
           lastFetchedHash = currentHash;
           items = list;
-          // Adjust columnCount dynamically if items have more slots
-          const maxSlots = Math.max(...items.map(it => (it.slots || []).length), 1);
-          if (maxSlots > columnCount) {
-            columnCount = maxSlots;
-          }
           saveLocalCache();
           renderTable();
         }
@@ -344,9 +341,16 @@
       await fetch(`${META_ENDPOINT}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ columnCount: count, updatedAt: Date.now() })
+        body: JSON.stringify({
+          columnCount: count,
+          updatedAt: Date.now(),
+          _clientSessionId: CLIENT_SESSION_ID
+        })
       });
-    } catch (e) {}
+      updateConnectionStatus(true);
+    } catch (e) {
+      console.warn('[DB] Sync column meta error:', e);
+    }
   };
 
   const syncInitialDataToCloud = async () => {
@@ -434,13 +438,31 @@
             return;
           }
 
+          // Realtime column meta sync
+          if (eventPath === '/_column_meta') {
+            if (eventData && eventData.columnCount) {
+              const remoteCols = parseInt(eventData.columnCount, 10);
+              if (!isNaN(remoteCols) && remoteCols >= 1 && remoteCols !== columnCount) {
+                columnCount = remoteCols;
+                items.forEach(it => {
+                  it.slots = normalizeItemSlots(it.slots, columnCount);
+                  it.subclasses = normalizeSubclasses(it.subclasses, columnCount, it.slots, it.subClass);
+                });
+                saveLocalCache();
+                renderTable();
+                showToast(`COLUMNS SYNCHRONIZED: ${columnCount}`);
+              }
+            }
+            return;
+          }
+
           if (eventPath === '/') {
             if (!eventData || typeof eventData !== 'object') {
               items = [];
             } else {
               if (eventData['_column_meta'] && eventData['_column_meta'].columnCount) {
                 const metaCols = parseInt(eventData['_column_meta'].columnCount, 10);
-                if (metaCols >= 1) columnCount = metaCols;
+                if (!isNaN(metaCols) && metaCols >= 1) columnCount = metaCols;
               }
               const itemKeys = Object.keys(eventData).filter(k => !k.startsWith('_'));
               const list = itemKeys.map(k => {
@@ -456,8 +478,6 @@
               });
               list.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
               items = list;
-              const maxSlots = Math.max(...items.map(it => (it.slots || []).length), 1);
-              if (maxSlots > columnCount) columnCount = maxSlots;
             }
             saveLocalCache();
             renderTable();
@@ -467,13 +487,16 @@
             const itemId = parts[0];
 
             if (itemId === '_column_meta') {
-              if (eventData && eventData.columnCount) {
-                const newCols = parseInt(eventData.columnCount, 10);
-                if (newCols >= 1 && newCols !== columnCount) {
-                  columnCount = newCols;
-                  saveLocalCache();
-                  renderTable();
-                }
+              const newCols = parts[1] === 'columnCount' ? parseInt(eventData, 10) : (eventData && eventData.columnCount ? parseInt(eventData.columnCount, 10) : null);
+              if (newCols && !isNaN(newCols) && newCols >= 1 && newCols !== columnCount) {
+                columnCount = newCols;
+                items.forEach(it => {
+                  it.slots = normalizeItemSlots(it.slots, columnCount);
+                  it.subclasses = normalizeSubclasses(it.subclasses, columnCount, it.slots, it.subClass);
+                });
+                saveLocalCache();
+                renderTable();
+                showToast(`COLUMNS SYNCHRONIZED: ${columnCount}`);
               }
               return;
             }
@@ -863,9 +886,7 @@
       delToolBtn.textContent = '✕';
       delToolBtn.onclick = (e) => {
         e.stopPropagation();
-        if (confirm(`DELETE TOOL "${item.itemName || 'TOOL ' + (rowIndex + 1)}"?`)) {
-          deleteItem(item.id);
-        }
+        deleteItem(item.id);
       };
       r1.appendChild(delToolBtn);
       col1.appendChild(r1);
@@ -1256,16 +1277,53 @@
     showToast(`NEW SUBCLASS ADDED TO ${item.itemName || 'TOOL'}`);
   };
 
-  const deleteSubclass = (itemId, subIdx) => {
+  // -------------------------------------------------------------
+  // SECURITY AUTHENTICATION SYSTEM (Mandatory Password: 7722)
+  // Hidden, secured entry mechanism: masked password input,
+  // no prompt revealing password directly to users
+  // -------------------------------------------------------------
+  let securityAuthResolve = null;
+
+  const requestSecurityAuth = (actionDescription = 'DELETION') => {
+    return new Promise((resolve) => {
+      securityAuthResolve = resolve;
+      const modal = document.getElementById('securityModal');
+      const input = document.getElementById('secPasswordInput');
+      const subtitle = document.getElementById('secModalSubtitle');
+      const errText = document.getElementById('secErrorText');
+      const card = modal ? modal.querySelector('.modal-card') : null;
+
+      if (subtitle) {
+        subtitle.textContent = `ENTER SECURITY PASSWORD TO AUTHORIZE ${actionDescription.toUpperCase()}:`;
+      }
+      if (errText) errText.style.display = 'none';
+      if (card) card.classList.remove('shake');
+      if (input) {
+        input.type = 'password';
+        input.value = '';
+      }
+      const toggleBtn = document.getElementById('secToggleVisibilityBtn');
+      if (toggleBtn) toggleBtn.textContent = '👁️';
+
+      if (modal) {
+        modal.classList.add('active');
+      }
+      setTimeout(() => {
+        if (input) input.focus();
+      }, 120);
+    });
+  };
+
+  const deleteSubclass = async (itemId, subIdx) => {
     const item = items.find(i => i.id === itemId);
     if (!item || !item.subclasses || item.subclasses.length <= 1) {
       showToast('MINIMUM 1 SUBCLASS REQUIRED PER TOOL', true);
       return;
     }
     const subName = item.subclasses[subIdx]?.name || `SUBCLASS ${subIdx + 1}`;
-    if (!confirm(`ARE YOU SURE YOU WANT TO DELETE "${subName}" AND ITS ASSIGNED PRICES?`)) {
-      return;
-    }
+    const authenticated = await requestSecurityAuth(`DELETION OF SUBCLASS "${subName}"`);
+    if (!authenticated) return;
+
     item.subclasses.splice(subIdx, 1);
     if (item.subclasses.length > 0) {
       item.subClass = item.subclasses[0].name;
@@ -1276,39 +1334,28 @@
     showToast('SUBCLASS DELETED');
   };
 
-  const addNewColumn = () => {
+  const addNewColumn = async () => {
     columnCount += 1;
     items.forEach(it => {
       it.slots = normalizeItemSlots(it.slots, columnCount);
       it.subclasses = normalizeSubclasses(it.subclasses, columnCount, it.slots, it.subClass);
     });
     saveLocalCache();
-    syncColumnMeta(columnCount);
+    await syncColumnMeta(columnCount);
     items.forEach(it => saveItemToDatabase(it));
     renderTable();
     showToast(`COLUMN ${columnCount} ADDED`);
   };
 
-  // Delete specific column (Cryptographic PIN check via SecurityUtils)
-  const deleteSpecificColumn = (slotIdx) => {
+  // Delete specific column (via header 'X' mark with mandatory password 7722 verification)
+  const deleteSpecificColumn = async (slotIdx) => {
     if (columnCount <= 1) {
       showToast('MINIMUM 1 DETAIL COLUMN REQUIRED', true);
       return;
     }
     const colNum = slotIdx + 1;
-    const enteredPin = prompt(`ENTER PIN TO CONFIRM DELETION OF COLUMN ${colNum}:`);
-    if (enteredPin === null) {
-      return;
-    }
-
-    const isAuthorized = (typeof SecurityUtils !== 'undefined' && SecurityUtils.verifyPin)
-      ? SecurityUtils.verifyPin(enteredPin)
-      : (enteredPin.trim() === '7722');
-
-    if (!isAuthorized) {
-      showToast('INCORRECT PIN - DELETION CANCELLED', true);
-      return;
-    }
+    const authenticated = await requestSecurityAuth(`DELETION OF COLUMN ${colNum}`);
+    if (!authenticated) return;
 
     items.forEach(it => {
       if (Array.isArray(it.slots) && it.slots.length > slotIdx) {
@@ -1321,14 +1368,23 @@
       });
     });
     columnCount = Math.max(1, columnCount - 1);
+    items.forEach(it => {
+      it.slots = normalizeItemSlots(it.slots, columnCount);
+      it.subclasses = normalizeSubclasses(it.subclasses, columnCount, it.slots, it.subClass);
+    });
     saveLocalCache();
-    syncColumnMeta(columnCount);
+    await syncColumnMeta(columnCount);
     items.forEach(it => saveItemToDatabase(it));
     renderTable();
     showToast(`COLUMN ${colNum} DELETED`);
   };
 
-  const deleteItem = (itemId) => {
+  const deleteItem = async (itemId) => {
+    const item = items.find(it => it.id === itemId);
+    const itemName = item?.itemName || 'TOOL ROW';
+    const authenticated = await requestSecurityAuth(`DELETION OF ${itemName}`);
+    if (!authenticated) return;
+
     items = items.filter(it => it.id !== itemId);
     saveLocalCache();
     deleteItemFromDatabase(itemId);
@@ -1429,6 +1485,79 @@
     };
   }
 
+  // Security Modal Event Listeners
+  const secModal = document.getElementById('securityModal');
+  const secInput = document.getElementById('secPasswordInput');
+  const secToggleBtn = document.getElementById('secToggleVisibilityBtn');
+  const secCancelBtn = document.getElementById('secCancelBtn');
+  const secConfirmBtn = document.getElementById('secConfirmBtn');
+
+  if (secToggleBtn && secInput) {
+    secToggleBtn.onclick = () => {
+      if (secInput.type === 'password') {
+        secInput.type = 'text';
+        secToggleBtn.textContent = '🔒';
+      } else {
+        secInput.type = 'password';
+        secToggleBtn.textContent = '👁️';
+      }
+    };
+  }
+
+  const handleSecurityConfirm = () => {
+    const entered = (secInput ? secInput.value : '').trim();
+    const isAuthorized = (typeof SecurityUtils !== 'undefined' && SecurityUtils.verifyPin)
+      ? SecurityUtils.verifyPin(entered)
+      : (entered === '7722');
+
+    if (isAuthorized) {
+      if (secModal) secModal.classList.remove('active');
+      if (securityAuthResolve) {
+        const resolve = securityAuthResolve;
+        securityAuthResolve = null;
+        resolve(true);
+      }
+    } else {
+      const errText = document.getElementById('secErrorText');
+      const card = secModal ? secModal.querySelector('.modal-card') : null;
+      if (errText) errText.style.display = 'block';
+      if (card) {
+        card.classList.remove('shake');
+        void card.offsetWidth;
+        card.classList.add('shake');
+      }
+      if (secInput) {
+        secInput.value = '';
+        secInput.focus();
+      }
+      showToast('ACCESS DENIED: INCORRECT PASSWORD', true);
+    }
+  };
+
+  const handleSecurityCancel = () => {
+    if (secModal) secModal.classList.remove('active');
+    if (securityAuthResolve) {
+      const resolve = securityAuthResolve;
+      securityAuthResolve = null;
+      resolve(false);
+    }
+  };
+
+  if (secConfirmBtn) secConfirmBtn.onclick = handleSecurityConfirm;
+  if (secCancelBtn) secCancelBtn.onclick = handleSecurityCancel;
+
+  if (secInput) {
+    secInput.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSecurityConfirm();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleSecurityCancel();
+      }
+    };
+  }
+
   // Clear Modal Management with Security PIN Check
   const clearModal = document.getElementById('clearModal');
   const clearBtn = document.getElementById('clearBtn');
@@ -1448,17 +1577,9 @@
   const modalClearAll = document.getElementById('modalClearAll');
   if (modalClearAll && clearModal) {
     modalClearAll.onclick = async () => {
-      const enteredPin = prompt('ENTER PIN TO CONFIRM CLEARING ALL SPREADSHEET DATA:');
-      if (enteredPin === null) return;
-
-      const isAuthorized = (typeof SecurityUtils !== 'undefined' && SecurityUtils.verifyPin)
-        ? SecurityUtils.verifyPin(enteredPin)
-        : (enteredPin.trim() === '7722');
-
-      if (!isAuthorized) {
-        showToast('INCORRECT PIN - CLEAR CANCELLED', true);
-        return;
-      }
+      clearModal.classList.remove('active');
+      const authenticated = await requestSecurityAuth('CLEARING ALL SPREADSHEET DATA');
+      if (!authenticated) return;
 
       items = [];
       saveLocalCache();
@@ -1466,7 +1587,6 @@
         await fetch(`${DB_ENDPOINT}.json`, { method: 'DELETE' });
       } catch(e) {}
       renderTable();
-      clearModal.classList.remove('active');
       showToast('SPREADSHEET CLEARED');
     };
   }
@@ -1474,24 +1594,15 @@
   const modalResetTemplate = document.getElementById('modalResetTemplate');
   if (modalResetTemplate && clearModal) {
     modalResetTemplate.onclick = async () => {
-      const enteredPin = prompt('ENTER PIN TO CONFIRM RESETTING TEMPLATE:');
-      if (enteredPin === null) return;
-
-      const isAuthorized = (typeof SecurityUtils !== 'undefined' && SecurityUtils.verifyPin)
-        ? SecurityUtils.verifyPin(enteredPin)
-        : (enteredPin.trim() === '7722');
-
-      if (!isAuthorized) {
-        showToast('INCORRECT PIN - RESET CANCELLED', true);
-        return;
-      }
+      clearModal.classList.remove('active');
+      const authenticated = await requestSecurityAuth('RESETTING TO DEFAULT TEMPLATE');
+      if (!authenticated) return;
 
       items = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_DATA));
       columnCount = 3;
       saveLocalCache();
       await syncInitialDataToCloud();
       renderTable();
-      clearModal.classList.remove('active');
       showToast('RESET TO DEFAULT TEMPLATE');
     };
   }
