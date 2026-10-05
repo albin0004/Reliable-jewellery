@@ -8,6 +8,7 @@
  */
 
 import { sha256Sync, calculateDataChecksum } from './security.js';
+import { getHostedBaseUrl } from './urlShortener.js';
 
 const SHARE_URL_PARAM = 'share';
 
@@ -169,10 +170,24 @@ export function verifySharePin(tokenPayload, enteredPin) {
 /**
  * Construct full shareable URL from token
  */
-export function generateShareUrl(token) {
+export function generateShareUrl(token, customBase = null) {
+  if (customBase && typeof customBase === 'string' && customBase.trim()) {
+    const cleanBase = customBase.trim().replace(/\/+$/, '');
+    return `${cleanBase}?${SHARE_URL_PARAM}=${token}`;
+  }
+
   if (typeof window === 'undefined') return `?${SHARE_URL_PARAM}=${token}`;
+
+  const protocol = window.location.protocol;
   const origin = window.location.origin;
   const pathname = window.location.pathname;
+
+  // When running locally from file:/// or when origin is null, use the hosted public URL
+  if (protocol === 'file:' || !origin || origin === 'null') {
+    const hostedBase = getHostedBaseUrl();
+    return `${hostedBase}?${SHARE_URL_PARAM}=${token}`;
+  }
+
   return `${origin}${pathname}?${SHARE_URL_PARAM}=${token}`;
 }
 
