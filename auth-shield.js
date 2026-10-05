@@ -6,7 +6,7 @@
 // Helper to determine the relative path to the root directory
 function getRootPath() {
     const loc = window.location.pathname;
-    const folders = ['quotation', 'price-list', 'catalog', 'gold-converter', 'tools', 'diamond', 'NARRATION', 'narration', 'price-tracker'];
+    const folders = ['quotation', 'price-list', 'catalog', 'gold-converter', 'tools', 'diamond', 'NARRATION', 'narration', 'price-tracker', 'gold loss', 'gold%20loss'];
     const pathParts = loc.split('/');
     const isSubfolder = pathParts.some(part => folders.includes(part));
     return isSubfolder ? '../' : './';

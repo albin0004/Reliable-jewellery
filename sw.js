@@ -1,4 +1,4 @@
-const CACHE_NAME = 'reliable-jewellery-v14';
+const CACHE_NAME = 'reliable-jewellery-v15';
 const ASSETS = [
     './',
     './index.html',
@@ -15,7 +15,7 @@ const ASSETS = [
     './quotation/style.css',
     './quotation/script.js',
     './price-list/index.html',
-    './catalog/index.html',
+    './gold loss/index.html',
     './gold-converter/index.html',
     './tools/index.html',
     './diamond/index.html',
