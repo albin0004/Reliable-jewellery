@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist client-side Firebase public configuration"
+regexes = [
+  '''AIza[0-9A-Za-z\-_]{35}'''
+]
+paths = [
+  '''(?i)gold loss/.*''',
+  '''firebase-config\.js'''
+]
